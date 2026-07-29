@@ -12,7 +12,7 @@ CACHE_PLAYAS_DATA = {
     "timestamp": None,
     "data": []
 }
-CACHE_EXPIRATION_SECS = 1800 # 30 minutos
+CACHE_EXPIRATION_SECS = 1800  # 30 minutos
 
 def limpiar_texto(texto):
     if not texto:
@@ -22,124 +22,94 @@ def limpiar_texto(texto):
     texto = re.sub(r'[^a-zA-Z0-9\s]', '', texto).lower().strip()
     return texto
 
-DEFAULTS_MUNICIPIOS = {
-    "san pedro del pinatar": (37.8280, -0.7680),
-    "san javier": (37.7400, -0.7380),
-    "los alcazares": (37.7420, -0.8450),
-    "cartagena": (37.6200, -0.7300),
-    "mazarron": (37.5630, -1.2580),
-    "aguilas": (37.4040, -1.5800),
-    "lorca": (37.5180, -1.4050),
-}
+# Base de datos completa de playas de la Región de Murcia
+PLAYAS_BASE = [
+    # San Pedro del Pinatar
+    {"nombre": "El Mojón", "municipio": "San Pedro del Pinatar", "lat": 37.8420, "lng": -0.7720},
+    {"nombre": "Torre Derribada", "municipio": "San Pedro del Pinatar", "lat": 37.8295, "lng": -0.7635},
+    {"nombre": "La Llana", "municipio": "San Pedro del Pinatar", "lat": 37.8210, "lng": -0.7580},
+    {"nombre": "Villananitos", "municipio": "San Pedro del Pinatar", "lat": 37.8280, "lng": -0.7790},
+    {"nombre": "La Puntica", "municipio": "San Pedro del Pinatar", "lat": 37.8230, "lng": -0.7810},
+    {"nombre": "La Mota", "municipio": "San Pedro del Pinatar", "lat": 37.8250, "lng": -0.7850},
 
-COORDENADAS_PLAYAS = {
-    ("san pedro del pinatar", "el mojon"): (37.8420, -0.7720),
-    ("san pedro del pinatar", "torre derribada"): (37.8295, -0.7635),
-    ("san pedro del pinatar", "la llana"): (37.8210, -0.7580),
-    ("san pedro del pinatar", "villananitos"): (37.8280, -0.7790),
-    ("san pedro del pinatar", "la puntica"): (37.8230, -0.7810),
-    ("san pedro del pinatar", "la mota"): (37.8250, -0.7850),
+    # San Javier
+    {"nombre": "Barnuevo", "municipio": "San Javier", "lat": 37.7950, "lng": -0.8030},
+    {"nombre": "El Castillico", "municipio": "San Javier", "lat": 37.7890, "lng": -0.8060},
+    {"nombre": "Colón", "municipio": "San Javier", "lat": 37.7830, "lng": -0.8080},
+    {"nombre": "El Pescador", "municipio": "San Javier", "lat": 37.7980, "lng": -0.8010},
+    {"nombre": "La Ensenada", "municipio": "San Javier", "lat": 37.7780, "lng": -0.8110},
+    {"nombre": "Lebeche", "municipio": "San Javier", "lat": 37.7380, "lng": -0.7390},
+    {"nombre": "El Pedruchillo", "municipio": "San Javier", "lat": 37.7120, "lng": -0.7380},
+    {"nombre": "El Galán", "municipio": "San Javier", "lat": 37.6980, "lng": -0.7360},
+    {"nombre": "Eurovosa", "municipio": "San Javier", "lat": 37.6890, "lng": -0.7350},
+    {"nombre": "Playa Chica", "municipio": "San Javier", "lat": 37.7460, "lng": -0.7390},
+    {"nombre": "Veneziola", "municipio": "San Javier", "lat": 37.7650, "lng": -0.7360},
+    {"nombre": "Isla del Ciervo", "municipio": "San Javier", "lat": 37.6620, "lng": -0.7230},
 
-    ("san javier", "barnuevo"): (37.7950, -0.8030),
-    ("san javier", "el castillico"): (37.7890, -0.8060),
-    ("san javier", "colon"): (37.7830, -0.8080),
-    ("san javier", "el pescador"): (37.7980, -0.8010),
-    ("san javier", "la ensenada"): (37.7780, -0.8110),
-    ("san javier", "lebeche"): (37.7380, -0.7390),
-    ("san javier", "el pedruchillo"): (37.7120, -0.7380),
-    ("san javier", "pedrucho"): (37.7120, -0.7380),
-    ("san javier", "el galan"): (37.6980, -0.7360),
-    ("san javier", "eurovosa"): (37.6890, -0.7350),
-    ("san javier", "playa chica"): (37.7460, -0.7390),
-    ("san javier", "veneziola"): (37.7650, -0.7360),
-    ("san javier", "isla del ciervo"): (37.6620, -0.7230),
+    # Los Alcázares
+    {"nombre": "Las Salinas", "municipio": "Los Alcázares", "lat": 37.7550, "lng": -0.8380},
+    {"nombre": "Los Narejos", "municipio": "Los Alcázares", "lat": 37.7480, "lng": -0.8410},
+    {"nombre": "El Espejo", "municipio": "Los Alcázares", "lat": 37.7410, "lng": -0.8440},
+    {"nombre": "Manzanares", "municipio": "Los Alcázares", "lat": 37.7340, "lng": -0.8480},
+    {"nombre": "Carrión", "municipio": "Los Alcázares", "lat": 37.7280, "lng": -0.8510},
+    {"nombre": "La Concha", "municipio": "Los Alcázares", "lat": 37.7220, "lng": -0.8550},
 
-    ("los alcazares", "las salinas"): (37.7550, -0.8380),
-    ("los alcazares", "los narejos"): (37.7480, -0.8410),
-    ("los alcazares", "el espejo"): (37.7410, -0.8440),
-    ("los alcazares", "manzanares"): (37.7340, -0.8480),
-    ("los alcazares", "carrion"): (37.7280, -0.8510),
-    ("los alcazares", "la concha"): (37.7220, -0.8550),
+    # Cartagena
+    {"nombre": "Punta Brava", "municipio": "Cartagena", "lat": 37.6685, "lng": -0.8412},
+    {"nombre": "Los Urrutias", "municipio": "Cartagena", "lat": 37.6821, "lng": -0.8351},
+    {"nombre": "Los Nietos", "municipio": "Cartagena", "lat": 37.6534, "lng": -0.7712},
+    {"nombre": "Islas Menores", "municipio": "Cartagena", "lat": 37.6415, "lng": -0.7345},
+    {"nombre": "Mar de Cristal", "municipio": "Cartagena", "lat": 37.6362, "lng": -0.7425},
+    {"nombre": "Playa Honda", "municipio": "Cartagena", "lat": 37.6300, "lng": -0.7300},
+    {"nombre": "La Gola", "municipio": "Cartagena", "lat": 37.6432, "lng": -0.7185},
+    {"nombre": "Marchamalo", "municipio": "Cartagena", "lat": 37.6350, "lng": -0.7100},
+    {"nombre": "Entremares", "municipio": "Cartagena", "lat": 37.6420, "lng": -0.7150},
+    {"nombre": "Galuá", "municipio": "Cartagena", "lat": 37.6480, "lng": -0.7120},
+    {"nombre": "Cavanna", "municipio": "Cartagena", "lat": 37.6520, "lng": -0.7200},
+    {"nombre": "Calblanque", "municipio": "Cartagena", "lat": 37.6025, "lng": -0.7380},
+    {"nombre": "Cala Cortina", "municipio": "Cartagena", "lat": 37.5891, "lng": -0.9721},
+    {"nombre": "El Portús", "municipio": "Cartagena", "lat": 37.5870, "lng": -1.0560},
+    {"nombre": "Isla Plana", "municipio": "Cartagena", "lat": 37.5720, "lng": -1.2110},
+    {"nombre": "La Azohía", "municipio": "Cartagena", "lat": 37.5612, "lng": -1.1685},
+    {"nombre": "San Ginés", "municipio": "Cartagena", "lat": 37.5612, "lng": -1.1685},
+    {"nombre": "Cala Reona", "municipio": "Cartagena", "lat": 37.6250, "lng": -0.7080},
+    {"nombre": "Portmán", "municipio": "Cartagena", "lat": 37.5850, "lng": -0.8520},
 
-    ("cartagena", "punta brava"): (37.6685, -0.8412),
-    ("cartagena", "los urrutias"): (37.6821, -0.8351),
-    ("cartagena", "los nietos"): (37.6534, -0.7712),
-    ("cartagena", "islas menores"): (37.6415, -0.7345),
-    ("cartagena", "mar de cristal"): (37.6362, -0.7425),
-    ("cartagena", "playa honda"): (37.6300, -0.7300),
-    ("cartagena", "la gola"): (37.6432, -0.7185),
-    ("cartagena", "marchamalo"): (37.6350, -0.7100),
-    ("cartagena", "entremares"): (37.6420, -0.7150),
-    ("cartagena", "galua"): (37.6480, -0.7120),
-    ("cartagena", "cavanna"): (37.6520, -0.7200),
-    ("cartagena", "calblanque"): (37.6025, -0.7380),
-    ("cartagena", "cala cortina"): (37.5891, -0.9721),
-    ("cartagena", "el portus"): (37.5870, -1.0560),
-    ("cartagena", "isla plana"): (37.5720, -1.2110),
-    ("cartagena", "la azohia"): (37.5612, -1.1685),
-    ("cartagena", "san gines"): (37.5612, -1.1685),
-    ("cartagena", "cala reona"): (37.6250, -0.7080),
-    ("cartagena", "portman"): (37.5850, -0.8520),
+    # Mazarrón
+    {"nombre": "Bolnuevo", "municipio": "Mazarrón", "lat": 37.5618, "lng": -1.3025},
+    {"nombre": "Castellar", "municipio": "Mazarrón", "lat": 37.5580, "lng": -1.2825},
+    {"nombre": "Nares", "municipio": "Mazarrón", "lat": 37.5588, "lng": -1.2745},
+    {"nombre": "La Isla", "municipio": "Mazarrón", "lat": 37.5608, "lng": -1.2690},
+    {"nombre": "Bahía", "municipio": "Mazarrón", "lat": 37.5622, "lng": -1.2642},
+    {"nombre": "Puerto", "municipio": "Mazarrón", "lat": 37.5638, "lng": -1.2580},
+    {"nombre": "Rihuete", "municipio": "Mazarrón", "lat": 37.5678, "lng": -1.2515},
+    {"nombre": "El Alamillo", "municipio": "Mazarrón", "lat": 37.5710, "lng": -1.2430},
+    {"nombre": "El Mojón (Mazarrón)", "municipio": "Mazarrón", "lat": 37.5752, "lng": -1.2335},
+    {"nombre": "Percheles", "municipio": "Mazarrón", "lat": 37.5255, "lng": -1.3535},
 
-    ("mazarron", "bolnuevo"): (37.5618, -1.3025),
-    ("mazarron", "castellar"): (37.5580, -1.2825),
-    ("mazarron", "nares"): (37.5588, -1.2745),
-    ("mazarron", "la isla"): (37.5608, -1.2690),
-    ("mazarron", "bahia"): (37.5622, -1.2642),
-    ("mazarron", "puerto"): (37.5638, -1.2580),
-    ("mazarron", "rihuete"): (37.5678, -1.2515),
-    ("mazarron", "sillas"): (37.5678, -1.2515),
-    ("mazarron", "el alamillo"): (37.5710, -1.2430),
-    ("mazarron", "alamillo"): (37.5710, -1.2430),
-    ("mazarron", "el mojon"): (37.5752, -1.2335),
-    ("mazarron", "mojon"): (37.5752, -1.2335),
-    ("mazarron", "percheles"): (37.5255, -1.3535),
-    ("mazarron", "covaticas"): (37.5350, -1.3360),
+    # Águilas
+    {"nombre": "Levante", "municipio": "Águilas", "lat": 37.4048, "lng": -1.5778},
+    {"nombre": "La Colonia", "municipio": "Águilas", "lat": 37.4032, "lng": -1.5831},
+    {"nombre": "Poniente", "municipio": "Águilas", "lat": 37.4025, "lng": -1.5862},
+    {"nombre": "Casica Verde", "municipio": "Águilas", "lat": 37.3951, "lng": -1.6033},
+    {"nombre": "Matalentisco", "municipio": "Águilas", "lat": 37.3977, "lng": -1.6177},
+    {"nombre": "Calarreona", "municipio": "Águilas", "lat": 37.3865, "lng": -1.6186},
+    {"nombre": "La Higuerica", "municipio": "Águilas", "lat": 37.3795, "lng": -1.6248},
+    {"nombre": "La Carolina", "municipio": "Águilas", "lat": 37.3762, "lng": -1.6283},
+    {"nombre": "Hornillo", "municipio": "Águilas", "lat": 37.4090, "lng": -1.5680},
+    {"nombre": "Calabardina", "municipio": "Águilas", "lat": 37.4317, "lng": -1.5019},
+    {"nombre": "Las Delicias", "municipio": "Águilas", "lat": 37.4070, "lng": -1.5730},
+    {"nombre": "Los Cocedores", "municipio": "Águilas", "lat": 37.3740, "lng": -1.6310},
 
-    ("aguilas", "levante"): (37.4048, -1.5778),
-    ("aguilas", "la colonia"): (37.4032, -1.5831),
-    ("aguilas", "poniente"): (37.4025, -1.5862),
-    ("aguilas", "casica verde"): (37.3951, -1.6033),
-    ("aguilas", "matalentisco"): (37.3977, -1.6177),
-    ("aguilas", "la cabana"): (37.3982, -1.6005),
-    ("aguilas", "calarreona"): (37.3865, -1.6186),
-    ("aguilas", "la higuerica"): (37.3795, -1.6248),
-    ("aguilas", "la carolina"): (37.3762, -1.6283),
-    ("aguilas", "hornillo"): (37.4090, -1.5680),
-    ("aguilas", "calabardina"): (37.4317, -1.5019),
-    ("aguilas", "las delicias"): (37.4070, -1.5730),
-    ("aguilas", "los cocedores"): (37.3740, -1.6310),
-
-    ("lorca", "puntas de calnegre"): (37.5180, -1.4050),
-    ("lorca", "cala lena"): (37.5100, -1.4150),
-    ("lorca", "cala blanca"): (37.5020, -1.4250),
-}
+    # Lorca
+    {"nombre": "Puntas de Calnegre", "municipio": "Lorca", "lat": 37.5180, "lng": -1.4050},
+    {"nombre": "Cala Leña", "municipio": "Lorca", "lat": 37.5100, "lng": -1.4150},
+    {"nombre": "Cala Blanca", "municipio": "Lorca", "lat": 37.5020, "lng": -1.4250}
+]
 
 @app.route("/")
 def index():
     return send_from_directory(os.getcwd(), "playas.html")
-
-def obtener_coordenadas(nombre_playa, municipio):
-    p_clean = limpiar_texto(nombre_playa)
-    m_clean = limpiar_texto(municipio)
-
-    for (m, p), coords in COORDENADAS_PLAYAS.items():
-        m_dict = limpiar_texto(m)
-        p_dict = limpiar_texto(p)
-        if m_dict in m_clean or m_clean in m_dict:
-            if p_dict in p_clean or p_clean in p_dict:
-                return coords
-
-    for (m, p), coords in COORDENADAS_PLAYAS.items():
-        p_dict = limpiar_texto(p)
-        if len(p_dict) >= 4 and (p_dict in p_clean or p_clean in p_dict):
-            return coords
-
-    for mun_key, coords in DEFAULTS_MUNICIPIOS.items():
-        if mun_key in m_clean or m_clean in mun_key:
-            return coords
-
-    return (37.6252, -0.7732)
 
 def traducir_codigo_tiempo(codigo):
     traducciones = {
@@ -189,67 +159,47 @@ def obtener_clima_por_municipio(municipio, lat, lng):
     CACHE_CLIMA[m_key] = clima
     return clima
 
-def extraer_playas_con_requests():
-    playas_brutas = []
+def obtener_estados_banderas_112():
+    """Intenta obtener el estado de las banderas desde la web del 112."""
+    banderas = {}
     try:
-        print("[SCRAPER] Consultando web del 112 con requests...")
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        res = requests.get("https://noticias.112rmurcia.es/playas/", headers=headers, timeout=15)
-        if res.status_code != 200:
-            print(f"[SCRAPER ERROR] Estado HTTP: {res.status_code}")
-            return []
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        url_main = "https://noticias.112rmurcia.es/playas/"
+        res = requests.get(url_main, headers=headers, timeout=5)
         
-        soup = BeautifulSoup(res.text, 'html.parser')
-        divs = soup.find_all(['div', 'article', 'tr', 'li'])
-        nombres_vistos = set()
-        
-        for div in divs:
-            text = div.get_text(separator='\n', strip=True)
-            if text and ('BAÑO' in text.upper() or 'PRECAUCIÓN' in text.upper() or 'PELIGROSO' in text.upper() or 'PROHIBIDO' in text.upper()) and len(text) < 350:
-                lines = [l.strip() for l in text.split('\n') if l.strip()]
-                if len(lines) >= 2:
-                    nombre = lines[0]
-                    if len(nombre) < 3 or len(nombre) > 60:
-                        continue
-                    skip_words = ["cookie", "aviso", "inicio", "contacto", "112", "murcia", "noticias", "estado", "menu", "emergencias", "todas", "playas", "prevención", "verano", "síguenos"]
-                    if any(w in nombre.lower() for w in skip_words):
-                        continue
-                    
-                    texto_upper = text.upper()
-                    municipio_detectado = "Cartagena"
-                    for mun in DEFAULTS_MUNICIPIOS.keys():
-                        if mun in text.lower():
-                            municipio_detectado = mun.title()
-                            break
-                    
-                    clave_unica = f"{municipio_detectado.lower()}_{nombre.lower()}"
-                    if clave_unica in nombres_vistos:
-                        continue
-                    nombres_vistos.add(clave_unica)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            
+            # Buscar iframe si existe
+            iframe = soup.find('iframe')
+            target_url = iframe['src'] if iframe and iframe.get('src') else url_main
+            
+            if target_url.startswith('/'):
+                target_url = "https://noticias.112rmurcia.es" + target_url
 
-                    color = "Verde"
-                    hex_col = "#28a745"
-                    estado = "Apto para el baño"
-                    
-                    if "ROJA" in texto_upper or "PROHIBIDO" in texto_upper or "PELIGROSO" in texto_upper:
-                        color = "Roja"
-                        hex_col = "#dc3545"
-                        estado = "Peligroso / Prohibido (112)"
-                    elif "AMARILLA" in texto_upper or "PRECAUCIÓN" in texto_upper:
-                        color = "Amarilla"
-                        hex_col = "#e0a800"
-                        estado = "Precaución (112)"
-                        
-                    playas_brutas.append({
-                        "nombre": nombre,
-                        "municipio": municipio_detectado,
-                        "bandera": {"color": color, "texto": estado, "hex": hex_col}
-                    })
-        print(f"[SCRAPER] Total de playas extraídas: {len(playas_brutas)}")
+            res_target = requests.get(target_url, headers=headers, timeout=5) if target_url != url_main else res
+            if res_target.status_code == 200:
+                soup_target = BeautifulSoup(res_target.text, 'html.parser')
+                textos = soup_target.find_all(['div', 'tr', 'li', 'p'])
+                
+                for el in textos:
+                    txt = el.get_text(strip=True).upper()
+                    if 'ROJA' in txt or 'PROHIBIDO' in txt:
+                        for p in PLAYAS_BASE:
+                            if limpiar_texto(p['nombre']) in limpiar_texto(txt):
+                                banderas[limpiar_texto(p['nombre'])] = {
+                                    "color": "Roja", "texto": "Peligroso / Prohibido (112)", "hex": "#dc3545"
+                                }
+                    elif 'AMARILLA' in txt or 'PRECAUCIÓN' in txt:
+                        for p in PLAYAS_BASE:
+                            if limpiar_texto(p['nombre']) in limpiar_texto(txt):
+                                banderas[limpiar_texto(p['nombre'])] = {
+                                    "color": "Amarilla", "texto": "Precaución (112)", "hex": "#e0a800"
+                                }
     except Exception as e:
-        print(f"[ERROR SCRAPING]: {e}")
+        print(f"[112 SCRAPER INFO]: {e}")
         
-    return playas_brutas
+    return banderas
 
 @app.route("/api/playas")
 def api_playas():
@@ -260,23 +210,31 @@ def api_playas():
         print("[API] Sirviendo playas desde la caché.")
         return jsonify({
             "status": "ok",
-            "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
+            "ultima_actualizacion": CACHE_PLAYAS_DATA["timestamp"].strftime("%H:%M:%S"),
             "playas": CACHE_PLAYAS_DATA["data"]
         })
 
     CACHE_CLIMA.clear()
-    brutas = extraer_playas_con_requests()
-    
+    banderas_112 = obtener_estados_banderas_112()
     playas_procesadas = []
-    for p in brutas:
-        lat, lng = obtener_coordenadas(p["nombre"], p["municipio"])
-        clima = obtener_clima_por_municipio(p["municipio"], lat, lng)
+
+    for playa in PLAYAS_BASE:
+        nombre_clean = limpiar_texto(playa["nombre"])
+        
+        # Estado de bandera por defecto (Verde / Apto)
+        bandera = banderas_112.get(nombre_clean, {
+            "color": "Verde",
+            "texto": "Apto para el baño",
+            "hex": "#28a745"
+        })
+        
+        clima = obtener_clima_por_municipio(playa["municipio"], playa["lat"], playa["lng"])
         
         playas_procesadas.append({
-            "nombre": p["nombre"],
-            "municipio": p["municipio"],
-            "lat": lat,
-            "lng": lng,
+            "nombre": playa["nombre"],
+            "municipio": playa["municipio"],
+            "lat": playa["lat"],
+            "lng": playa["lng"],
             "cielo": clima["cielo"],
             "temperatura": clima["temperatura"],
             "humedad": clima["humedad"],
@@ -284,7 +242,7 @@ def api_playas():
             "nubes": clima["nubes"],
             "viento": clima["viento"],
             "altura_olas": clima["altura_olas"],
-            "bandera": p["bandera"]
+            "bandera": bandera
         })
 
     CACHE_PLAYAS_DATA["data"] = playas_procesadas
