@@ -8,8 +8,14 @@ from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
+# Caché global para evitar scraping excesivo y timeouts
+CACHE_PLAYAS_DATA = {
+    "timestamp": None,
+    "data": []
+}
+CACHE_EXPIRATION_SECS = 1800 # 30 minutos
+
 def limpiar_texto(texto):
-    """Limpia paréntesis, acentos y caracteres especiales para comparar nombres."""
     if not texto:
         return ""
     texto = re.sub(r'\(.*?\)', '', texto)
@@ -207,24 +213,22 @@ def extraer_playas_con_playwright():
             print("[SCRAPER] Navegando a la web del 112...")
             page.goto("https://noticias.112rmurcia.es/playas/", timeout=40000)
             
-            # Esperar a que la página cargue por completo
             try:
                 page.wait_for_load_state("networkidle", timeout=15000)
             except Exception:
                 pass
 
-            # Esperar específicamente a que aparezca el selector <select>
             try:
                 page.wait_for_selector("select", timeout=12000)
             except Exception:
-                print("[SCRAPER ADVERTENCIA]: El selector principal tardó en aparecer o la web devolvió contenido vacío.")
+                print("[SCRAPER ADVERTENCIA]: El selector principal tardó en aparecer.")
 
             target_frame = page
             for frame in page.frames:
                 try:
                     if frame.query_selector("select"):
                         target_frame = frame
-                        print(f"[SCRAPER] Selector encontrado dentro del iframe: {frame.url or 'subframe'}")
+                        print(f"[SCRAPER] Selector encontrado en el iframe: {frame.url or 'subframe'}")
                         break
                 except Exception:
                     continue
@@ -237,7 +241,7 @@ def extraer_playas_con_playwright():
                     .filter(o => o.value && !o.text.toLowerCase().includes('selecciona'));
             }""")
             
-            print(f"[SCRAPER] Municipios encontrados en el selector: {len(municipios)}")
+            print(f"[SCRAPER] Municipios encontrados: {len(municipios)}")
             nombres_vistos = set()
 
             if municipios:
@@ -305,7 +309,7 @@ def extraer_playas_con_playwright():
                         print(f"[SCRAPER ERROR {nombre_municipio}]: {e}")
 
             browser.close()
-        print(f"[SCRAPER] Total de playas extraídas de toda Murcia: {len(playas_brutas)}")
+        print(f"[SCRAPER] Total de playas extraídas: {len(playas_brutas)}")
     except Exception as e:
         print(f"[ERROR SCRAPING PLAYWRIGHT]: {e}")
         
@@ -313,8 +317,19 @@ def extraer_playas_con_playwright():
 
 @app.route("/api/playas")
 def api_playas():
+    global CACHE_PLAYAS_DATA
+    ahora = datetime.now()
+    
+    # Si la caché es válida, la servimos de inmediato sin bloquearnos
+    if CACHE_PLAYAS_DATA["data"] and CACHE_PLAYAS_DATA["timestamp"] and (ahora - CACHE_PLAYAS_DATA["timestamp"]).seconds < CACHE_EXPIRATION_SECS:
+        print("[API] Sirviendo playas desde la caché local.")
+        return jsonify({
+            "status": "ok",
+            "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
+            "playas": CACHE_PLAYAS_DATA["data"]
+        })
+
     CACHE_CLIMA.clear()
-    hora_actual = datetime.now().strftime("%H:%M:%S")
     brutas = extraer_playas_con_playwright()
     
     playas_procesadas = []
@@ -337,10 +352,13 @@ def api_playas():
             "bandera": p["bandera"]
         })
 
+    CACHE_PLAYAS_DATA["data"] = playas_procesadas
+    CACHE_PLAYAS_DATA["timestamp"] = ahora
+
     print(f"[API] Enviando {len(playas_procesadas)} playas procesadas.")
     return jsonify({
         "status": "ok",
-        "ultima_actualizacion": hora_actual,
+        "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
         "playas": playas_procesadas
     })
 
