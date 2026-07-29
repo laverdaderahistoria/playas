@@ -167,6 +167,7 @@ def obtener_estados_banderas_112():
         url_main = "https://noticias.112rmurcia.es/playas/"
         res = requests.get(url_main, headers=headers, timeout=10)
         
+        print(f"[DEBUG 112] Código HTTP principal: {res.status_code}")
         html_contenido = ""
         if res.status_code == 200:
             html_contenido += res.text
@@ -176,16 +177,20 @@ def obtener_estados_banderas_112():
                 sub_url = iframe['src']
                 if sub_url.startswith('/'):
                     sub_url = "https://noticias.112rmurcia.es" + sub_url
+                print(f"[DEBUG 112] Iframe detectado: {sub_url}")
                 try:
                     res_sub = requests.get(sub_url, headers=headers, timeout=5)
                     if res_sub.status_code == 200:
                         html_contenido += " " + res_sub.text
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[DEBUG 112] Error cargando iframe: {e}")
 
         soup_full = BeautifulSoup(html_contenido, 'html.parser')
-        tarjetas = soup_full.find_all(['div', 'article', 'li', 'tr'])
+        tarjetas = soup_full.find_all(['div', 'article', 'li', 'tr', 'p', 'span'])
         
+        print(f"[DEBUG 112] Total de elementos analizados en HTML: {len(tarjetas)}")
+        
+        conteo_alertas = 0
         for tarjeta in tarjetas:
             txt_tarjeta = tarjeta.get_text(separator=' ', strip=True)
             if not txt_tarjeta or len(txt_tarjeta) > 400:
@@ -194,6 +199,10 @@ def obtener_estados_banderas_112():
             txt_upper = txt_tarjeta.upper()
             txt_clean = limpiar_texto(txt_tarjeta)
             
+            if 'AMARILLA' in txt_upper or 'ROJA' in txt_upper or 'PRECAUCION' in txt_upper:
+                conteo_alertas += 1
+                print(f"[ALERTA DETECTADA EN WEB]: {txt_tarjeta}")
+
             color_tarjeta = "Verde"
             texto_tarj = "Apto para el baño"
             hex_tarj = "#28a745"
@@ -227,6 +236,10 @@ def obtener_estados_banderas_112():
                             "texto": texto_tarj,
                             "hex": hex_tarj
                         }
+                        if color_tarjeta != "Verde":
+                            print(f"[ASIGNADO] Playa {playa['nombre']} -> {color_tarjeta}")
+                            
+        print(f"[DEBUG 112] Total menciones de alertas encontradas en texto: {conteo_alertas}")
     except Exception as e:
         print(f"[ERROR 112 BANDERAS]: {e}")
         
