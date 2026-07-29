@@ -86,6 +86,7 @@ PLAYAS_BASE = [
     {"nombre": "El Alamillo", "municipio": "Mazarrón", "lat": 37.5710, "lng": -1.2430},
     {"nombre": "El Mojón (Mazarrón)", "municipio": "Mazarrón", "lat": 37.5752, "lng": -1.2335},
     {"nombre": "Percheles", "municipio": "Mazarrón", "lat": 37.5255, "lng": -1.3535},
+    {"nombre": "La Reya", "municipio": "Mazarrón", "lat": 37.5595, "lng": -1.2910},
 
     # Águilas
     {"nombre": "Levante", "municipio": "Águilas", "lat": 37.4048, "lng": -1.5778},
@@ -160,44 +161,71 @@ def obtener_clima_por_municipio(municipio, lat, lng):
     return clima
 
 def obtener_estados_banderas_112():
-    """Intenta obtener el estado de las banderas desde la web del 112."""
     banderas = {}
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         url_main = "https://noticias.112rmurcia.es/playas/"
-        res = requests.get(url_main, headers=headers, timeout=5)
+        res = requests.get(url_main, headers=headers, timeout=8)
         
         if res.status_code == 200:
+            html_contenido = res.text
             soup = BeautifulSoup(res.text, 'html.parser')
             
-            # Buscar iframe si existe
+            # Revisar si hay iframes internos donde cargue la app de playas
             iframe = soup.find('iframe')
-            target_url = iframe['src'] if iframe and iframe.get('src') else url_main
-            
-            if target_url.startswith('/'):
-                target_url = "https://noticias.112rmurcia.es" + target_url
+            if iframe and iframe.get('src'):
+                sub_url = iframe['src']
+                if sub_url.startswith('/'):
+                    sub_url = "https://noticias.112rmurcia.es" + sub_url
+                try:
+                    res_sub = requests.get(sub_url, headers=headers, timeout=5)
+                    if res_sub.status_code == 200:
+                        html_contenido += " " + res_sub.text
+                except Exception:
+                    pass
 
-            res_target = requests.get(target_url, headers=headers, timeout=5) if target_url != url_main else res
-            if res_target.status_code == 200:
-                soup_target = BeautifulSoup(res_target.text, 'html.parser')
-                textos = soup_target.find_all(['div', 'tr', 'li', 'p'])
+            soup_total = BeautifulSoup(html_contenido, 'html.parser')
+            bloques = soup_total.find_all(['div', 'article', 'li', 'tr', 'section'])
+            
+            for bloque in bloques:
+                txt_bloque = bloque.get_text(separator=' ', strip=True)
+                if not txt_bloque or len(txt_bloque) > 600:
+                    continue
                 
-                for el in textos:
-                    txt = el.get_text(strip=True).upper()
-                    if 'ROJA' in txt or 'PROHIBIDO' in txt:
-                        for p in PLAYAS_BASE:
-                            if limpiar_texto(p['nombre']) in limpiar_texto(txt):
-                                banderas[limpiar_texto(p['nombre'])] = {
-                                    "color": "Roja", "texto": "Peligroso / Prohibido (112)", "hex": "#dc3545"
-                                }
-                    elif 'AMARILLA' in txt or 'PRECAUCIÓN' in txt:
-                        for p in PLAYAS_BASE:
-                            if limpiar_texto(p['nombre']) in limpiar_texto(txt):
-                                banderas[limpiar_texto(p['nombre'])] = {
-                                    "color": "Amarilla", "texto": "Precaución (112)", "hex": "#e0a800"
-                                }
+                txt_upper = txt_bloque.upper()
+                
+                color_detectado = None
+                texto_estado = None
+                hex_color = None
+                
+                if any(w in txt_upper for w in ['ROJA', 'PROHIBIDO', 'PELIGROSO']):
+                    color_detectado = "Roja"
+                    texto_estado = "Peligroso / Prohibido (112)"
+                    hex_color = "#dc3545"
+                elif any(w in txt_upper for w in ['AMARILLA', 'PRECAUCIÓN', 'PRECAUCION']):
+                    color_detectado = "Amarilla"
+                    texto_estado = "Precaución (112)"
+                    hex_color = "#e0a800"
+                elif any(w in txt_upper for w in ['VERDE', 'APTA', 'APTO']):
+                    color_detectado = "Verde"
+                    texto_estado = "Apto para el baño"
+                    hex_color = "#28a745"
+                    
+                if color_detectado:
+                    for playa in PLAYAS_BASE:
+                        nombre_p_limpio = limpiar_texto(playa['nombre'])
+                        # Extraer solo la primera palabra clave o nombre principal (ej: "Bolnuevo" de "Bolnuevo (Camping)")
+                        nombre_base_cortado = nombre_p_limpio.split()[0] if len(nombre_p_limpio.split()) > 0 else nombre_p_limpio
+                        
+                        txt_bloque_limpio = limpiar_texto(txt_bloque)
+                        if (nombre_p_limpio in txt_bloque_limpio) or (len(nombre_base_cortado) >= 4 and nombre_base_cortado in txt_bloque_limpio):
+                            banderas[nombre_p_limpio] = {
+                                "color": color_detectado,
+                                "texto": texto_estado,
+                                "hex": hex_color
+                            }
     except Exception as e:
-        print(f"[112 SCRAPER INFO]: {e}")
+        print(f"[ERROR 112 BANDERAS]: {e}")
         
     return banderas
 
@@ -221,7 +249,7 @@ def api_playas():
     for playa in PLAYAS_BASE:
         nombre_clean = limpiar_texto(playa["nombre"])
         
-        # Estado de bandera por defecto (Verde / Apto)
+        # Obtener bandera real del 112 o verde por defecto
         bandera = banderas_112.get(nombre_clean, {
             "color": "Verde",
             "texto": "Apto para el baño",
