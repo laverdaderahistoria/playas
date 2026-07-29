@@ -184,8 +184,6 @@ def obtener_estados_banderas_112():
                     pass
 
         soup_full = BeautifulSoup(html_contenido, 'html.parser')
-        
-        # Analizar tarjeta por tarjeta o contenedor pequeño
         tarjetas = soup_full.find_all(['div', 'article', 'li', 'tr'])
         
         for tarjeta in tarjetas:
@@ -211,9 +209,18 @@ def obtener_estados_banderas_112():
 
             for playa in PLAYAS_BASE:
                 n_clean = limpiar_texto(playa['nombre'])
-                n_cortado = n_clean.split()[0] if n_clean else ""
+                palabras_sig = [p for p in n_clean.split() if p not in ['el', 'la', 'los', 'las', 'de', 'del']]
                 
-                if n_clean in txt_clean or (len(n_cortado) >= 4 and n_cortado in txt_clean):
+                match = False
+                if n_clean in txt_clean:
+                    match = True
+                elif palabras_sig:
+                    for palabra in palabras_sig:
+                        if len(palabra) >= 4 and palabra in txt_clean:
+                            match = True
+                            break
+                
+                if match:
                     if color_tarjeta != "Verde" or n_clean not in banderas:
                         banderas[n_clean] = {
                             "color": color_tarjeta,
@@ -230,7 +237,6 @@ def api_playas():
     global CACHE_PLAYAS_DATA
     ahora = datetime.now()
     
-    # Limpiar caché forzadamente si quieres comprobar cambios inmediatos durante pruebas
     if CACHE_PLAYAS_DATA["data"] and CACHE_PLAYAS_DATA["timestamp"] and (ahora - CACHE_PLAYAS_DATA["timestamp"]).seconds < CACHE_EXPIRATION_SECS:
         print("[API] Sirviendo playas desde la caché.")
         return jsonify({

@@ -34,13 +34,30 @@
             font-size: 1.05rem;
             font-weight: 600;
         }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
         #last-update {
             font-size: 0.78rem;
             color: #bdc3c7;
         }
+        #toggle-search {
+            display: none;
+            background: #0077b6;
+            border: none;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
 
         #content {
             display: flex;
+            flex-direction: row;
             height: calc(100vh - 48px);
             width: 100%;
             position: relative;
@@ -50,9 +67,10 @@
             flex: 1;
             height: 100%;
             width: 100%;
+            z-index: 1;
         }
 
-        /* Panel Lateral de Búsqueda */
+        /* Panel Lateral de Búsqueda (Ubicado a la derecha) */
         #search-panel {
             width: 280px;
             background: #ffffff;
@@ -61,6 +79,8 @@
             flex-direction: column;
             z-index: 999;
             box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+            order: 2;
+            transition: transform 0.3s ease;
         }
 
         .search-box {
@@ -201,19 +221,44 @@
             text-align: center;
             width: 100%;
         }
+
+        /* Adaptación a Móviles (Pantallas menores de 768px) */
+        @media (max-width: 768px) {
+            #toggle-search {
+                display: block;
+            }
+            #search-panel {
+                position: absolute;
+                right: 0;
+                top: 0;
+                height: 100%;
+                width: 270px;
+                transform: translateX(100%);
+                box-shadow: -5px 0 15px rgba(0,0,0,0.3);
+            }
+            #search-panel.open {
+                transform: translateX(0);
+            }
+            #last-update {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
 
     <div id="header">
-        <h1>🏖️ Estado de Banderas y Clima - Murcia</h1>
-        <div id="last-update">Cargando...</div>
+        <h1>🏖️ Playas de Murcia</h1>
+        <div class="header-right">
+            <div id="last-update">Cargando...</div>
+            <button id="toggle-search" onclick="togglePanel()">🔍 Buscar</button>
+        </div>
     </div>
 
     <div id="content">
         <div id="map"></div>
 
-        <!-- Buscador Lateral -->
+        <!-- Buscador Lateral (Derecha) -->
         <div id="search-panel">
             <div class="search-box">
                 <input type="text" id="search-input" placeholder="Buscar playa o municipio..." oninput="filtrarPlayas()">
@@ -244,6 +289,11 @@
 
         let todasLasPlayas = [];
         let marcadores = {};
+
+        function togglePanel() {
+            const panel = document.getElementById('search-panel');
+            panel.classList.toggle('open');
+        }
 
         function crearIconoConNombre(colorHex, nombrePlaya) {
             const html = `
@@ -318,7 +368,12 @@
                 const index = todasLasPlayas.indexOf(playa);
                 const li = document.createElement('li');
                 li.className = 'beach-item';
-                li.onclick = () => seleccionarPlaya(index);
+                li.onclick = () => {
+                    seleccionarPlaya(index);
+                    if (window.innerWidth <= 768) {
+                        togglePanel(); // Ocultar panel en móvil al seleccionar
+                    }
+                };
 
                 li.innerHTML = `
                     <div class="beach-info">
