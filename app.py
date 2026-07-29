@@ -161,89 +161,16 @@ def obtener_clima_por_municipio(municipio, lat, lng):
     return clima
 
 def obtener_estados_banderas_112():
-    banderas = {}
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        url_main = "https://noticias.112rmurcia.es/playas/"
-        res = requests.get(url_main, headers=headers, timeout=10)
-        
-        print(f"[DEBUG 112] Código HTTP principal: {res.status_code}")
-        html_contenido = ""
-        if res.status_code == 200:
-            html_contenido += res.text
-            soup = BeautifulSoup(res.text, 'html.parser')
-            iframe = soup.find('iframe')
-            if iframe and iframe.get('src'):
-                sub_url = iframe['src']
-                if sub_url.startswith('/'):
-                    sub_url = "https://noticias.112rmurcia.es" + sub_url
-                print(f"[DEBUG 112] Iframe detectado: {sub_url}")
-                try:
-                    res_sub = requests.get(sub_url, headers=headers, timeout=5)
-                    if res_sub.status_code == 200:
-                        html_contenido += " " + res_sub.text
-                except Exception as e:
-                    print(f"[DEBUG 112] Error cargando iframe: {e}")
-
-        soup_full = BeautifulSoup(html_contenido, 'html.parser')
-        tarjetas = soup_full.find_all(['div', 'article', 'li', 'tr', 'p', 'span'])
-        
-        print(f"[DEBUG 112] Total de elementos analizados en HTML: {len(tarjetas)}")
-        
-        conteo_alertas = 0
-        for tarjeta in tarjetas:
-            txt_tarjeta = tarjeta.get_text(separator=' ', strip=True)
-            if not txt_tarjeta or len(txt_tarjeta) > 400:
-                continue
-            
-            txt_upper = txt_tarjeta.upper()
-            txt_clean = limpiar_texto(txt_tarjeta)
-            
-            if 'AMARILLA' in txt_upper or 'ROJA' in txt_upper or 'PRECAUCION' in txt_upper:
-                conteo_alertas += 1
-                print(f"[ALERTA DETECTADA EN WEB]: {txt_tarjeta}")
-
-            color_tarjeta = "Verde"
-            texto_tarj = "Apto para el baño"
-            hex_tarj = "#28a745"
-            
-            if any(w in txt_upper for w in ['ROJA', 'PROHIBIDO', 'PELIGROSO']):
-                color_tarjeta = "Roja"
-                texto_tarj = "Peligroso / Prohibido (112)"
-                hex_tarj = "#dc3545"
-            elif any(w in txt_upper for w in ['AMARILLA', 'PRECAUCIÓN', 'PRECAUCION']):
-                color_tarjeta = "Amarilla"
-                texto_tarj = "Precaución (112)"
-                hex_tarj = "#e0a800"
-
-            for playa in PLAYAS_BASE:
-                n_clean = limpiar_texto(playa['nombre'])
-                palabras_sig = [p for p in n_clean.split() if p not in ['el', 'la', 'los', 'las', 'de', 'del']]
-                
-                match = False
-                if n_clean in txt_clean:
-                    match = True
-                elif palabras_sig:
-                    for palabra in palabras_sig:
-                        if len(palabra) >= 4 and palabra in txt_clean:
-                            match = True
-                            break
-                
-                if match:
-                    if color_tarjeta != "Verde" or n_clean not in banderas:
-                        banderas[n_clean] = {
-                            "color": color_tarjeta,
-                            "texto": texto_tarj,
-                            "hex": hex_tarj
-                        }
-                        if color_tarjeta != "Verde":
-                            print(f"[ASIGNADO] Playa {playa['nombre']} -> {color_tarjeta}")
-                            
-        print(f"[DEBUG 112] Total menciones de alertas encontradas en texto: {conteo_alertas}")
-    except Exception as e:
-        print(f"[ERROR 112 BANDERAS]: {e}")
-        
-    return banderas
+    """
+    Nota técnica: La web del 112 carga sus datos mediante mapas interactivos JS.
+    Este diccionario permite definir de forma rápida las alertas activas en la Región
+    cuando se requiera reflejar avisos amarillos o rojos institucionales reales.
+    """
+    banderas_manuales = {
+        # "bolnuevo": {"color": "Amarilla", "texto": "Precaución - Oleaje", "hex": "#e0a800"},
+        # "calblanque": {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
+    }
+    return banderas_manuales
 
 @app.route("/api/playas")
 def api_playas():
