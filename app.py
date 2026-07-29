@@ -206,7 +206,16 @@ def extraer_playas_con_playwright():
     try:
         print("[SCRAPER] Abriendo navegador Playwright...")
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            # CORRECCIÓN PARA RENDER: Se añaden args de seguridad esenciales
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu'
+                ]
+            )
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
