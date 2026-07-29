@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estado de las Playas de Murcia (112)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body, html {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background-color: #f4f6f9;
+        }
+        #header {
+            height: 48px;
+            background-color: #1a252f;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            position: relative;
+        }
+        #header h1 {
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+        #last-update {
+            font-size: 0.78rem;
+            color: #bdc3c7;
+        }
+
+        #content {
+            display: flex;
+            height: calc(100vh - 48px);
+            width: 100%;
+            position: relative;
+        }
+
+        #map {
+            flex: 1;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Panel Lateral de Búsqueda */
+        #search-panel {
+            width: 280px;
+            background: #ffffff;
+            border-left: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            z-index: 999;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+        }
+
+        .search-box {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            background: #f8f9fa;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: #0077b6;
+        }
+
+        #beach-list {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+        }
+
+        .beach-item {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .beach-item:hover {
+            background-color: #f0f7ff;
+        }
+
+        .beach-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .beach-name {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #1a252f;
+        }
+
+        .beach-mun {
+            font-size: 0.72rem;
+            color: #7f8c8d;
+        }
+
+        .beach-flag-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        /* Estilo del Pin con Nombre Debajo */
+        .custom-pin-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .pin-label {
+            background-color: rgba(255, 255, 255, 0.9);
+            color: #1a252f;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 3px;
+            border: 1px solid rgba(0,0,0,0.15);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            white-space: nowrap;
+            margin-top: 1px;
+            max-width: 110px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: center;
+        }
+
+        /* Popup Compacto */
+        .leaflet-popup-content-wrapper {
+            padding: 0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .leaflet-popup-content {
+            margin: 10px 12px !important;
+            line-height: 1.3;
+        }
+        .popup-card {
+            min-width: 190px;
+            max-width: 220px;
+        }
+        .popup-card h3 {
+            margin-bottom: 1px;
+            color: #0d3b66;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            line-height: 1.2;
+        }
+        .popup-card h4 {
+            margin-bottom: 8px;
+            color: #0077b6;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .clima-info {
+            margin-bottom: 8px;
+            font-size: 0.75rem;
+            color: #333;
+        }
+        .clima-info p {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #eee;
+            padding: 2px 0;
+        }
+        .flag-badge {
+            display: block;
+            padding: 5px 8px;
+            border-radius: 4px;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 0.75rem;
+            text-align: center;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="header">
+        <h1>🏖️ Estado de Banderas y Clima - Murcia</h1>
+        <div id="last-update">Cargando...</div>
+    </div>
+
+    <div id="content">
+        <div id="map"></div>
+
+        <!-- Buscador Lateral -->
+        <div id="search-panel">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Buscar playa o municipio..." oninput="filtrarPlayas()">
+            </div>
+            <ul id="beach-list"></ul>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const boundsMurcia = L.latLngBounds(
+            L.latLng(37.3000, -1.7500),
+            L.latLng(37.9000, -0.6000)
+        );
+
+        const map = L.map('map', {
+            center: [37.6200, -1.0000],
+            zoom: 10,
+            minZoom: 9,
+            maxZoom: 15,
+            maxBounds: boundsMurcia,
+            maxBoundsViscosity: 0.9
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let todasLasPlayas = [];
+        let marcadores = {};
+
+        function crearIconoConNombre(colorHex, nombrePlaya) {
+            const html = `
+                <div class="custom-pin-container">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="${colorHex}" stroke="#FFFFFF" stroke-width="1.5" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                        <circle cx="12" cy="9" r="2.5" fill="#FFFFFF"/>
+                    </svg>
+                    <span class="pin-label">${nombrePlaya}</span>
+                </div>
+            `;
+
+            return L.divIcon({
+                className: '',
+                html: html,
+                iconSize: [80, 42],
+                iconAnchor: [40, 24],
+                popupAnchor: [0, -22]
+            });
+        }
+
+        async function cargarPlayas() {
+            try {
+                const response = await fetch('/api/playas');
+                const data = await response.json();
+
+                if (data.status === 'ok') {
+                    document.getElementById('last-update').innerText = `Actualizado: ${data.ultima_actualizacion}`;
+                    todasLasPlayas = data.playas;
+
+                    todasLasPlayas.forEach((playa, index) => {
+                        const icon = crearIconoConNombre(playa.bandera.hex, playa.nombre);
+                        
+                        const popupContent = `
+                            <div class="popup-card">
+                                <h3>${playa.nombre}</h3>
+                                <h4>📍 ${playa.municipio}</h4>
+                                <div class="clima-info">
+                                    <p><span>Cielo:</span> <strong>${playa.cielo}</strong></p>
+                                    <p><span>Temp:</span> <strong>${playa.temperatura}</strong></p>
+                                    <p><span>Humedad:</span> <strong>${playa.humedad}</strong></p>
+                                    <p><span>Lluvia:</span> <strong>${playa.prob_lluvia}</strong></p>
+                                    <p><span>Viento:</span> <strong>${playa.viento}</strong></p>
+                                    <p><span>Olas:</span> <strong>${playa.altura_olas}</strong></p>
+                                </div>
+                                <div class="flag-badge" style="background-color: ${playa.bandera.hex};">
+                                    ${playa.bandera.texto}
+                                </div>
+                            </div>
+                        `;
+
+                        const marker = L.marker([playa.lat, playa.lng], { icon: icon })
+                            .addTo(map)
+                            .bindPopup(popupContent);
+
+                        marcadores[index] = marker;
+                    });
+
+                    renderListaPlayas(todasLasPlayas);
+                }
+            } catch (error) {
+                console.error('Error cargando playas:', error);
+                document.getElementById('last-update').innerText = 'Error de conexión';
+            }
+        }
+
+        function renderListaPlayas(playas) {
+            const listEl = document.getElementById('beach-list');
+            listEl.innerHTML = '';
+
+            playas.forEach(playa => {
+                const index = todasLasPlayas.indexOf(playa);
+                const li = document.createElement('li');
+                li.className = 'beach-item';
+                li.onclick = () => seleccionarPlaya(index);
+
+                li.innerHTML = `
+                    <div class="beach-info">
+                        <span class="beach-name">${playa.nombre}</span>
+                        <span class="beach-mun">${playa.municipio}</span>
+                    </div>
+                    <span class="beach-flag-dot" style="background-color: ${playa.bandera.hex};"></span>
+                `;
+                listEl.appendChild(li);
+            });
+        }
+
+        function filtrarPlayas() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filtradas = todasLasPlayas.filter(p => 
+                p.nombre.toLowerCase().includes(query) || 
+                p.municipio.toLowerCase().includes(query)
+            );
+            renderListaPlayas(filtradas);
+        }
+
+        function seleccionarPlaya(index) {
+            const playa = todasLasPlayas[index];
+            const marker = marcadores[index];
+
+            if (marker) {
+                map.flyTo([playa.lat, playa.lng], 13, { duration: 1.2 });
+                marker.openPopup();
+            }
+        }
+
+        cargarPlayas();
+    </script>
+</body>
+</html>
