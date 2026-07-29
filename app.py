@@ -3,12 +3,11 @@ import os
 import re
 import unicodedata
 import requests
+from bs4 import BeautifulSoup
 from datetime import datetime
-from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
-# Caché global para evitar scraping excesivo y timeouts
 CACHE_PLAYAS_DATA = {
     "timestamp": None,
     "data": []
@@ -190,128 +189,65 @@ def obtener_clima_por_municipio(municipio, lat, lng):
     CACHE_CLIMA[m_key] = clima
     return clima
 
-def extraer_playas_con_playwright():
+def extraer_playas_con_requests():
     playas_brutas = []
     try:
-        print("[SCRAPER] Abriendo navegador Playwright...")
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu'
-                ]
-            )
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800}
-            )
-            page = context.new_page()
-            
-            print("[SCRAPER] Navegando a la web del 112...")
-            page.goto("https://noticias.112rmurcia.es/playas/", timeout=40000)
-            
-            try:
-                page.wait_for_load_state("networkidle", timeout=15000)
-            except Exception:
-                pass
-
-            try:
-                page.wait_for_selector("select", timeout=12000)
-            except Exception:
-                print("[SCRAPER ADVERTENCIA]: El selector principal tardó en aparecer.")
-
-            target_frame = page
-            for frame in page.frames:
-                try:
-                    if frame.query_selector("select"):
-                        target_frame = frame
-                        print(f"[SCRAPER] Selector encontrado en el iframe: {frame.url or 'subframe'}")
-                        break
-                except Exception:
-                    continue
-
-            municipios = target_frame.evaluate("""() => {
-                const select = document.querySelector('select');
-                if (!select) return [];
-                return Array.from(select.options)
-                    .map(opt => ({ text: opt.innerText.trim(), value: opt.value }))
-                    .filter(o => o.value && !o.text.toLowerCase().includes('selecciona'));
-            }""")
-            
-            print(f"[SCRAPER] Municipios encontrados: {len(municipios)}")
-            nombres_vistos = set()
-
-            if municipios:
-                for mun in municipios:
-                    nombre_municipio = mun["text"]
-                    val_municipio = mun["value"]
+        print("[SCRAPER] Consultando web del 112 con requests...")
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        res = requests.get("https://noticias.112rmurcia.es/playas/", headers=headers, timeout=15)
+        if res.status_code != 200:
+            print(f"[SCRAPER ERROR] Estado HTTP: {res.status_code}")
+            return []
+        
+        soup = BeautifulSoup(res.text, 'html.parser')
+        divs = soup.find_all(['div', 'article', 'tr', 'li'])
+        nombres_vistos = set()
+        
+        for div in divs:
+            text = div.get_text(separator='\n', strip=True)
+            if text and ('BAÑO' in text.upper() or 'PRECAUCIÓN' in text.upper() or 'PELIGROSO' in text.upper() or 'PROHIBIDO' in text.upper()) and len(text) < 350:
+                lines = [l.strip() for l in text.split('\n') if l.strip()]
+                if len(lines) >= 2:
+                    nombre = lines[0]
+                    if len(nombre) < 3 or len(nombre) > 60:
+                        continue
+                    skip_words = ["cookie", "aviso", "inicio", "contacto", "112", "murcia", "noticias", "estado", "menu", "emergencias", "todas", "playas", "prevención", "verano", "síguenos"]
+                    if any(w in nombre.lower() for w in skip_words):
+                        continue
                     
-                    try:
-                        target_frame.select_option("select", value=val_municipio)
-                        target_frame.wait_for_timeout(1000)
-                        
-                        tarjetas = target_frame.evaluate("""() => {
-                            const divs = document.querySelectorAll('div, article, tr, li');
-                            let results = [];
-                            divs.forEach(div => {
-                                let text = div.innerText;
-                                if (text && (text.includes('BAÑO') || text.includes('PRECAUCIÓN') || text.includes('PELIGROSO') || text.includes('PROHIBIDO')) && text.length < 350) {
-                                    let lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
-                                    if (lines.length >= 2) {
-                                        results.push({
-                                            nombre: lines[0],
-                                            textoCompleto: text
-                                        });
-                                    }
-                                }
-                            });
-                            return results;
-                        }""")
-                        
-                        for item in tarjetas:
-                            nombre = item["nombre"]
-                            texto = item["textoCompleto"].upper()
-                            
-                            if len(nombre) < 3 or len(nombre) > 60:
-                                continue
-                                
-                            skip_words = ["cookie", "aviso", "inicio", "contacto", "112", "murcia", "noticias", "estado", "menu", "emergencias", "todas", "playas", "prevención", "verano", "síguenos"]
-                            if any(w in nombre.lower() for w in skip_words):
-                                continue
-                                
-                            clave_unica = f"{nombre_municipio.lower()}_{nombre.lower()}"
-                            if clave_unica in nombres_vistos:
-                                continue
-                            nombres_vistos.add(clave_unica)
+                    texto_upper = text.upper()
+                    municipio_detectado = "Cartagena"
+                    for mun in DEFAULTS_MUNICIPIOS.keys():
+                        if mun in text.lower():
+                            municipio_detectado = mun.title()
+                            break
+                    
+                    clave_unica = f"{municipio_detectado.lower()}_{nombre.lower()}"
+                    if clave_unica in nombres_vistos:
+                        continue
+                    nombres_vistos.add(clave_unica)
 
-                            color = "Verde"
-                            hex_col = "#28a745"
-                            estado = "Apto para el baño"
-                            
-                            if "ROJA" in texto or "PROHIBIDO" in texto or "PELIGROSO" in texto:
-                                color = "Roja"
-                                hex_col = "#dc3545"
-                                estado = "Peligroso / Prohibido (112)"
-                            elif "AMARILLA" in texto or "PRECAUCIÓN" in texto:
-                                color = "Amarilla"
-                                hex_col = "#e0a800"
-                                estado = "Precaución (112)"
-                                
-                            playas_brutas.append({
-                                "nombre": nombre,
-                                "municipio": nombre_municipio,
-                                "bandera": {"color": color, "texto": estado, "hex": hex_col}
-                            })
-                    except Exception as e:
-                        print(f"[SCRAPER ERROR {nombre_municipio}]: {e}")
-
-            browser.close()
+                    color = "Verde"
+                    hex_col = "#28a745"
+                    estado = "Apto para el baño"
+                    
+                    if "ROJA" in texto_upper or "PROHIBIDO" in texto_upper or "PELIGROSO" in texto_upper:
+                        color = "Roja"
+                        hex_col = "#dc3545"
+                        estado = "Peligroso / Prohibido (112)"
+                    elif "AMARILLA" in texto_upper or "PRECAUCIÓN" in texto_upper:
+                        color = "Amarilla"
+                        hex_col = "#e0a800"
+                        estado = "Precaución (112)"
+                        
+                    playas_brutas.append({
+                        "nombre": nombre,
+                        "municipio": municipio_detectado,
+                        "bandera": {"color": color, "texto": estado, "hex": hex_col}
+                    })
         print(f"[SCRAPER] Total de playas extraídas: {len(playas_brutas)}")
     except Exception as e:
-        print(f"[ERROR SCRAPING PLAYWRIGHT]: {e}")
+        print(f"[ERROR SCRAPING]: {e}")
         
     return playas_brutas
 
@@ -320,9 +256,8 @@ def api_playas():
     global CACHE_PLAYAS_DATA
     ahora = datetime.now()
     
-    # Si la caché es válida, la servimos de inmediato sin bloquearnos
     if CACHE_PLAYAS_DATA["data"] and CACHE_PLAYAS_DATA["timestamp"] and (ahora - CACHE_PLAYAS_DATA["timestamp"]).seconds < CACHE_EXPIRATION_SECS:
-        print("[API] Sirviendo playas desde la caché local.")
+        print("[API] Sirviendo playas desde la caché.")
         return jsonify({
             "status": "ok",
             "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
@@ -330,7 +265,7 @@ def api_playas():
         })
 
     CACHE_CLIMA.clear()
-    brutas = extraer_playas_con_playwright()
+    brutas = extraer_playas_con_requests()
     
     playas_procesadas = []
     for p in brutas:
