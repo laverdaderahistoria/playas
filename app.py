@@ -12,12 +12,11 @@ def limpiar_texto(texto):
     """Limpia paréntesis, acentos y caracteres especiales para comparar nombres."""
     if not texto:
         return ""
-    texto = re.sub(r'\(.*?\)', '', texto) # Elimina parentesis y su contenido
+    texto = re.sub(r'\(.*?\)', '', texto)
     texto = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
     texto = re.sub(r'[^a-zA-Z0-9\s]', '', texto).lower().strip()
     return texto
 
-# Coordenadas por defecto en la costa de cada municipio (ajustadas a la orilla)
 DEFAULTS_MUNICIPIOS = {
     "san pedro del pinatar": (37.8280, -0.7680),
     "san javier": (37.7400, -0.7380),
@@ -28,9 +27,7 @@ DEFAULTS_MUNICIPIOS = {
     "lorca": (37.5180, -1.4050),
 }
 
-# Diccionario exacto de coordenadas para las playas de Murcia
 COORDENADAS_PLAYAS = {
-    # SAN PEDRO DEL PINATAR
     ("san pedro del pinatar", "el mojon"): (37.8420, -0.7720),
     ("san pedro del pinatar", "torre derribada"): (37.8295, -0.7635),
     ("san pedro del pinatar", "la llana"): (37.8210, -0.7580),
@@ -38,7 +35,6 @@ COORDENADAS_PLAYAS = {
     ("san pedro del pinatar", "la puntica"): (37.8230, -0.7810),
     ("san pedro del pinatar", "la mota"): (37.8250, -0.7850),
 
-    # SAN JAVIER / LA MANGA
     ("san javier", "barnuevo"): (37.7950, -0.8030),
     ("san javier", "el castillico"): (37.7890, -0.8060),
     ("san javier", "colon"): (37.7830, -0.8080),
@@ -53,7 +49,6 @@ COORDENADAS_PLAYAS = {
     ("san javier", "veneziola"): (37.7650, -0.7360),
     ("san javier", "isla del ciervo"): (37.6620, -0.7230),
 
-    # LOS ALCÁZARES
     ("los alcazares", "las salinas"): (37.7550, -0.8380),
     ("los alcazares", "los narejos"): (37.7480, -0.8410),
     ("los alcazares", "el espejo"): (37.7410, -0.8440),
@@ -61,7 +56,6 @@ COORDENADAS_PLAYAS = {
     ("los alcazares", "carrion"): (37.7280, -0.8510),
     ("los alcazares", "la concha"): (37.7220, -0.8550),
 
-    # CARTAGENA
     ("cartagena", "punta brava"): (37.6685, -0.8412),
     ("cartagena", "los urrutias"): (37.6821, -0.8351),
     ("cartagena", "los nietos"): (37.6534, -0.7712),
@@ -82,7 +76,6 @@ COORDENADAS_PLAYAS = {
     ("cartagena", "cala reona"): (37.6250, -0.7080),
     ("cartagena", "portman"): (37.5850, -0.8520),
 
-    # MAZARRÓN (COORDINADAS REVISADAS Y CORREGIDAS EN LÍNEA DE COSTA)
     ("mazarron", "bolnuevo"): (37.5618, -1.3025),
     ("mazarron", "castellar"): (37.5580, -1.2825),
     ("mazarron", "nares"): (37.5588, -1.2745),
@@ -98,7 +91,6 @@ COORDENADAS_PLAYAS = {
     ("mazarron", "percheles"): (37.5255, -1.3535),
     ("mazarron", "covaticas"): (37.5350, -1.3360),
 
-    # ÁGUILAS
     ("aguilas", "levante"): (37.4048, -1.5778),
     ("aguilas", "la colonia"): (37.4032, -1.5831),
     ("aguilas", "poniente"): (37.4025, -1.5862),
@@ -113,7 +105,6 @@ COORDENADAS_PLAYAS = {
     ("aguilas", "las delicias"): (37.4070, -1.5730),
     ("aguilas", "los cocedores"): (37.3740, -1.6310),
 
-    # LORCA
     ("lorca", "puntas de calnegre"): (37.5180, -1.4050),
     ("lorca", "cala lena"): (37.5100, -1.4150),
     ("lorca", "cala blanca"): (37.5020, -1.4250),
@@ -127,7 +118,6 @@ def obtener_coordenadas(nombre_playa, municipio):
     p_clean = limpiar_texto(nombre_playa)
     m_clean = limpiar_texto(municipio)
 
-    # 1. Búsqueda exacta por municipio + palabra clave de playa
     for (m, p), coords in COORDENADAS_PLAYAS.items():
         m_dict = limpiar_texto(m)
         p_dict = limpiar_texto(p)
@@ -135,13 +125,11 @@ def obtener_coordenadas(nombre_playa, municipio):
             if p_dict in p_clean or p_clean in p_dict:
                 return coords
 
-    # 2. Búsqueda flexible por nombre de playa (si el municipio falla)
     for (m, p), coords in COORDENADAS_PLAYAS.items():
         p_dict = limpiar_texto(p)
         if len(p_dict) >= 4 and (p_dict in p_clean or p_clean in p_dict):
             return coords
 
-    # 3. Fallback a municipio
     for mun_key, coords in DEFAULTS_MUNICIPIOS.items():
         if mun_key in m_clean or m_clean in mun_key:
             return coords
@@ -164,13 +152,8 @@ def obtener_clima_por_municipio(municipio, lat, lng):
         return CACHE_CLIMA[m_key]
 
     clima = {
-        "temperatura": "N/D",
-        "humedad": "N/D",
-        "prob_lluvia": "0%",
-        "cielo": "Despejado",
-        "nubes": "N/D",
-        "viento": "N/D",
-        "altura_olas": "0.2 m"
+        "temperatura": "N/D", "humedad": "N/D", "prob_lluvia": "0%",
+        "cielo": "Despejado", "nubes": "N/D", "viento": "N/D", "altura_olas": "0.2 m"
     }
     try:
         url_meteo = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&current=temperature_2m,relative_humidity_2m,weather_code,cloud_cover,wind_speed_10m&hourly=precipitation_probability&forecast_days=1&timezone=auto"
@@ -206,7 +189,6 @@ def extraer_playas_con_playwright():
     try:
         print("[SCRAPER] Abriendo navegador Playwright...")
         with sync_playwright() as p:
-            # CORRECCIÓN PARA RENDER: Se añaden args de seguridad esenciales
             browser = p.chromium.launch(
                 headless=True,
                 args=[
@@ -217,11 +199,25 @@ def extraer_playas_con_playwright():
                 ]
             )
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 800}
             )
             page = context.new_page()
+            
+            print("[SCRAPER] Navegando a la web del 112...")
             page.goto("https://noticias.112rmurcia.es/playas/", timeout=40000)
-            page.wait_for_timeout(4000)
+            
+            # Esperar a que la página cargue por completo
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except Exception:
+                pass
+
+            # Esperar específicamente a que aparezca el selector <select>
+            try:
+                page.wait_for_selector("select", timeout=12000)
+            except Exception:
+                print("[SCRAPER ADVERTENCIA]: El selector principal tardó en aparecer o la web devolvió contenido vacío.")
 
             target_frame = page
             for frame in page.frames:
