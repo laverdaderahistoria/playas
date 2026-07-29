@@ -165,13 +165,12 @@ def obtener_estados_banderas_112():
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         url_main = "https://noticias.112rmurcia.es/playas/"
-        res = requests.get(url_main, headers=headers, timeout=8)
+        res = requests.get(url_main, headers=headers, timeout=10)
         
+        html_contenido = ""
         if res.status_code == 200:
-            html_contenido = res.text
+            html_contenido += res.text
             soup = BeautifulSoup(res.text, 'html.parser')
-            
-            # Revisar si hay iframes internos donde cargue la app de playas
             iframe = soup.find('iframe')
             if iframe and iframe.get('src'):
                 sub_url = iframe['src']
@@ -184,46 +183,43 @@ def obtener_estados_banderas_112():
                 except Exception:
                     pass
 
-            soup_total = BeautifulSoup(html_contenido, 'html.parser')
-            bloques = soup_total.find_all(['div', 'article', 'li', 'tr', 'section'])
+        soup_full = BeautifulSoup(html_contenido, 'html.parser')
+        
+        # Analizar tarjeta por tarjeta o contenedor pequeño
+        tarjetas = soup_full.find_all(['div', 'article', 'li', 'tr'])
+        
+        for tarjeta in tarjetas:
+            txt_tarjeta = tarjeta.get_text(separator=' ', strip=True)
+            if not txt_tarjeta or len(txt_tarjeta) > 400:
+                continue
             
-            for bloque in bloques:
-                txt_bloque = bloque.get_text(separator=' ', strip=True)
-                if not txt_bloque or len(txt_bloque) > 600:
-                    continue
+            txt_upper = txt_tarjeta.upper()
+            txt_clean = limpiar_texto(txt_tarjeta)
+            
+            color_tarjeta = "Verde"
+            texto_tarj = "Apto para el baño"
+            hex_tarj = "#28a745"
+            
+            if any(w in txt_upper for w in ['ROJA', 'PROHIBIDO', 'PELIGROSO']):
+                color_tarjeta = "Roja"
+                texto_tarj = "Peligroso / Prohibido (112)"
+                hex_tarj = "#dc3545"
+            elif any(w in txt_upper for w in ['AMARILLA', 'PRECAUCIÓN', 'PRECAUCION']):
+                color_tarjeta = "Amarilla"
+                texto_tarj = "Precaución (112)"
+                hex_tarj = "#e0a800"
+
+            for playa in PLAYAS_BASE:
+                n_clean = limpiar_texto(playa['nombre'])
+                n_cortado = n_clean.split()[0] if n_clean else ""
                 
-                txt_upper = txt_bloque.upper()
-                
-                color_detectado = None
-                texto_estado = None
-                hex_color = None
-                
-                if any(w in txt_upper for w in ['ROJA', 'PROHIBIDO', 'PELIGROSO']):
-                    color_detectado = "Roja"
-                    texto_estado = "Peligroso / Prohibido (112)"
-                    hex_color = "#dc3545"
-                elif any(w in txt_upper for w in ['AMARILLA', 'PRECAUCIÓN', 'PRECAUCION']):
-                    color_detectado = "Amarilla"
-                    texto_estado = "Precaución (112)"
-                    hex_color = "#e0a800"
-                elif any(w in txt_upper for w in ['VERDE', 'APTA', 'APTO']):
-                    color_detectado = "Verde"
-                    texto_estado = "Apto para el baño"
-                    hex_color = "#28a745"
-                    
-                if color_detectado:
-                    for playa in PLAYAS_BASE:
-                        nombre_p_limpio = limpiar_texto(playa['nombre'])
-                        # Extraer solo la primera palabra clave o nombre principal (ej: "Bolnuevo" de "Bolnuevo (Camping)")
-                        nombre_base_cortado = nombre_p_limpio.split()[0] if len(nombre_p_limpio.split()) > 0 else nombre_p_limpio
-                        
-                        txt_bloque_limpio = limpiar_texto(txt_bloque)
-                        if (nombre_p_limpio in txt_bloque_limpio) or (len(nombre_base_cortado) >= 4 and nombre_base_cortado in txt_bloque_limpio):
-                            banderas[nombre_p_limpio] = {
-                                "color": color_detectado,
-                                "texto": texto_estado,
-                                "hex": hex_color
-                            }
+                if n_clean in txt_clean or (len(n_cortado) >= 4 and n_cortado in txt_clean):
+                    if color_tarjeta != "Verde" or n_clean not in banderas:
+                        banderas[n_clean] = {
+                            "color": color_tarjeta,
+                            "texto": texto_tarj,
+                            "hex": hex_tarj
+                        }
     except Exception as e:
         print(f"[ERROR 112 BANDERAS]: {e}")
         
@@ -234,6 +230,7 @@ def api_playas():
     global CACHE_PLAYAS_DATA
     ahora = datetime.now()
     
+    # Limpiar caché forzadamente si quieres comprobar cambios inmediatos durante pruebas
     if CACHE_PLAYAS_DATA["data"] and CACHE_PLAYAS_DATA["timestamp"] and (ahora - CACHE_PLAYAS_DATA["timestamp"]).seconds < CACHE_EXPIRATION_SECS:
         print("[API] Sirviendo playas desde la caché.")
         return jsonify({
@@ -249,7 +246,6 @@ def api_playas():
     for playa in PLAYAS_BASE:
         nombre_clean = limpiar_texto(playa["nombre"])
         
-        # Obtener bandera real del 112 o verde por defecto
         bandera = banderas_112.get(nombre_clean, {
             "color": "Verde",
             "texto": "Apto para el baño",
