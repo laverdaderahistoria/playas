@@ -159,10 +159,11 @@ def api_playas():
         playas_procesadas = []
 
         # Bandera por defecto (Verde / Apta para el baño según catálogo del 112)
+      # Bandera / Estado por defecto cuando la API del 112 bloquea el acceso
         BANDERA_DEFECTO = {
-            "color": "Verde",
-            "texto": "Apta para el baño",
-            "hex": "#28a745"
+            "color": "Gris",
+            "texto": "Sin datos en tiempo real",
+            "hex": "#6c757d"
         }
 
         for playa in PLAYAS_BASE:
