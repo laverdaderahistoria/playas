@@ -1,214 +1,406 @@
-from flask import Flask, jsonify, send_from_directory
-import os
-import requests
-import unicodedata
-import re
-from datetime import datetime
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estado de las Playas de Murcia (112)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body, html {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background-color: #f4f6f9;
+        }
+        #header {
+            height: 44px;
+            background-color: #1a252f;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            position: relative;
+        }
+        #header h1 {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #last-update {
+            font-size: 0.72rem;
+            color: #bdc3c7;
+        }
+        #toggle-search {
+            display: none;
+            background: #0077b6;
+            border: none;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
 
-app = Flask(__name__)
+        #content {
+            display: flex;
+            flex-direction: row;
+            height: calc(100vh - 44px);
+            width: 100%;
+            position: relative;
+        }
 
-session = requests.Session()
-session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Referer": "https://web-app.112rmurcia.com/"
-})
+        #map {
+            flex: 1;
+            height: 100%;
+            width: 100%;
+            z-index: 1;
+        }
 
-BASE_URL_112 = "https://web-app.112rmurcia.com/copla-service/copla"
+        #search-panel {
+            width: 220px;
+            background: #ffffff;
+            border-left: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            z-index: 999;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+            order: 2;
+            transition: transform 0.3s ease;
+        }
 
-def limpiar_texto(texto):
-    if not texto:
-        return ""
-    texto = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
-    texto = re.sub(r'[^a-zA-Z0-9]', ' ', texto).lower()
-    texto = re.sub(r'\s+', ' ', texto).strip()
-    return texto
+        .search-box {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            background: #f8f9fa;
+        }
 
-PLAYAS_COORDS = {
-    # Águilas
-    "CALABARDINA": {"lat": 37.4317, "lng": -1.5019},
-    "LA COLONIA": {"lat": 37.4032, "lng": -1.5831},
-    "LA CABAÑA": {"lat": 37.4010, "lng": -1.5900},
-    "HORNILLO": {"lat": 37.4090, "lng": -1.5680},
-    "PONIENTE I": {"lat": 37.4025, "lng": -1.5862},
-    "CALARREONA": {"lat": 37.3865, "lng": -1.6186},
-    "LAS DELICIAS I": {"lat": 37.4070, "lng": -1.5730},
-    "PONIENTE II": {"lat": 37.4020, "lng": -1.5870},
-    "LA HIGUERICA": {"lat": 37.3795, "lng": -1.6248},
-    "LAS DELICIAS II": {"lat": 37.4080, "lng": -1.5720},
-    "CASICA VERDE": {"lat": 37.3951, "lng": -1.6033},
-    "LA CAROLINA": {"lat": 37.3762, "lng": -1.6283},
-    "LEVANTE": {"lat": 37.4048, "lng": -1.5778},
-    "MATALENTISCO": {"lat": 37.3977, "lng": -1.6177},
-    # Mazarrón
-    "EL MOJON": {"lat": 37.5752, "lng": -1.2335},
-    "LA REYA": {"lat": 37.5595, "lng": -1.2910},
-    "BOLNUEVO": {"lat": 37.5618, "lng": -1.3025},
-    "EL ALAMILLO": {"lat": 37.5710, "lng": -1.2430},
-    "BAHIA": {"lat": 37.5622, "lng": -1.2642},
-    "PUERTO - RIHUETE": {"lat": 37.5678, "lng": -1.2515},
-    "NARES": {"lat": 37.5588, "lng": -1.2745},
-    "PERCHELES": {"lat": 37.5255, "lng": -1.3535},
-    "CASTELLAR": {"lat": 37.5580, "lng": -1.2825},
-}
+        .search-box input {
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
 
-def traducir_bandera(codigo_flag):
-    mapeo = {
-        100: {"texto": "SIN BANDERA", "hex": "#6c757d"},
-        200: {"texto": "VERDE", "hex": "#28a745"},
-        300: {"texto": "AMARILLA", "hex": "#ffc107"},
-        400: {"texto": "ROJA", "hex": "#dc3545"},
-        500: {"texto": "PLAYA CERRADA", "hex": "#343a40"}
-    }
-    return mapeo.get(codigo_flag, {"texto": "DESCONOCIDO", "hex": "#6c757d"})
+        .search-box input:focus {
+            border-color: #0077b6;
+        }
 
-def traducir_estado_mar(codigo_sea):
-    mapeo = {
-        0: "SIN ESTADO", 1: "LLANA", 2: "RIZADA", 3: "MAREJADILLA",
-        4: "MAREJADA", 5: "FUERTE MAREJADA", 6: "GRUESA", 7: "MUY GRUESA"
-    }
-    return mapeo.get(codigo_sea, "NORMAL")
+        #beach-list {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+        }
 
-def traducir_codigo_tiempo(codigo):
-    traducciones = {
-        0: "Despejado", 1: "Principalmente despejado", 2: "Parcialmente nuboso",
-        3: "Nuboso", 45: "Niebla", 51: "Llovizna", 61: "Lluvia ligera", 
-        63: "Lluvia moderada", 80: "Chubascos", 95: "Tormenta"
-    }
-    return traducciones.get(codigo, "Despejado")
+        .beach-item {
+            padding: 7px 10px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-CACHE_CLIMA = {}
+        .beach-item:hover {
+            background-color: #f0f7ff;
+        }
 
-CACHE_PLAYAS_EMERGENCIA = [
-    {
-        "nombre": "LA COLONIA", "municipio": "ÁGUILAS", "lat": 37.4032, "lng": -1.5831,
-        "cielo": "Despejado", "temperatura": "25°C", "humedad": "50%", "prob_lluvia": "0%",
-        "nubes": "10%", "viento": "10 km/h", "altura_olas": "0.2 m", "estado_mar": "LLANA",
-        "bandera": {"color": "VERDE", "texto": "VERDE", "hex": "#28a745"}
-    },
-    {
-        "nombre": "LEVANTE", "municipio": "ÁGUILAS", "lat": 37.4048, "lng": -1.5778,
-        "cielo": "Despejado", "temperatura": "25°C", "humedad": "50%", "prob_lluvia": "0%",
-        "nubes": "10%", "viento": "10 km/h", "altura_olas": "0.2 m", "estado_mar": "LLANA",
-        "bandera": {"color": "VERDE", "texto": "VERDE", "hex": "#28a745"}
-    },
-    {
-        "nombre": "PUERTO - RIHUETE", "municipio": "MAZARRÓN", "lat": 37.5678, "lng": -1.2515,
-        "cielo": "Despejado", "temperatura": "26°C", "humedad": "48%", "prob_lluvia": "0%",
-        "nubes": "5%", "viento": "12 km/h", "altura_olas": "0.3 m", "estado_mar": "RIZADA",
-        "bandera": {"color": "VERDE", "texto": "VERDE", "hex": "#28a745"}
-    }
-]
+        .beach-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
 
-def obtener_clima(lat, lng, municipio):
-    m_key = limpiar_texto(municipio)
-    if m_key in CACHE_CLIMA:
-        return CACHE_CLIMA[m_key]
+        .beach-name {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #1a252f;
+        }
 
-    clima = {
-        "temperatura": "N/D", "humedad": "N/D", "prob_lluvia": "0%",
-        "cielo": "Despejado", "nubes": "N/D", "viento": "N/D", "altura_olas": "0.2 m"
-    }
-    try:
-        url_meteo = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&current=temperature_2m,relative_humidity_2m,weather_code,cloud_cover,wind_speed_10m&hourly=precipitation_probability&forecast_days=1&timezone=auto"
-        res_m = requests.get(url_meteo, timeout=3)
-        if res_m.status_code == 200:
-            data = res_m.json()
-            cur = data.get("current", {})
-            clima["temperatura"] = f"{cur.get('temperature_2m', 'N/D')}°C"
-            clima["humedad"] = f"{cur.get('relative_humidity_2m', 'N/D')}%"
-            clima["cielo"] = traducir_codigo_tiempo(cur.get("weather_code", 0))
-            clima["nubes"] = f"{cur.get('cloud_cover', 'N/D')}%"
-            clima["viento"] = f"{cur.get('wind_speed_10m', 'N/D')} km/h"
-            
-            hourly_prob = data.get("hourly", {}).get("precipitation_probability", [])
-            if hourly_prob:
-                hora = datetime.now().hour
-                clima["prob_lluvia"] = f"{hourly_prob[hora]}%"
+        .beach-mun {
+            font-size: 0.68rem;
+            color: #7f8c8d;
+        }
 
-        url_mar = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lng}&current=wave_height&timezone=auto"
-        res_mar = requests.get(url_mar, timeout=3)
-        if res_mar.status_code == 200:
-            wave = res_mar.json().get("current", {}).get("wave_height")
-            if wave is not None:
-                clima["altura_olas"] = f"{wave} m"
-    except Exception as e:
-        print(f"[ERROR METEO]: {e}")
-        
-    CACHE_CLIMA[m_key] = clima
-    return clima
+        .beach-flag-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
 
-@app.route("/")
-def index():
-    return send_from_directory(os.getcwd(), "playas.html")
+        .custom-pin-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: auto;
+        }
 
-@app.route("/api/playas")
-def api_playas():
-    global CACHE_PLAYAS_EMERGENCIA
-    try:
-        CACHE_CLIMA.clear()
-        playas_procesadas = []
+        .pin-label {
+            background-color: rgba(255, 255, 255, 0.92);
+            color: #1a252f;
+            font-size: 0.62rem;
+            font-weight: 700;
+            padding: 1px 3px;
+            border-radius: 3px;
+            border: 1px solid rgba(0,0,0,0.15);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            white-space: nowrap;
+            margin-top: 1px;
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: center;
+        }
 
-        res_mun = session.get(f"{BASE_URL_112}/BeachMunicipality", timeout=4)
-        
-        if res_mun.status_code == 200:
-            municipios = res_mun.json()
-            for mun in municipios:
-                mun_id = mun.get("id")
-                mun_nombre = mun.get("name", "").upper()
+        .leaflet-popup-content-wrapper {
+            padding: 0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .leaflet-popup-content {
+            margin: 8px 10px !important;
+            line-height: 1.25;
+        }
+        .popup-card {
+            min-width: 175px;
+            max-width: 200px;
+        }
+        .popup-card h3 {
+            margin-bottom: 1px;
+            color: #0d3b66;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            line-height: 1.2;
+        }
+        .popup-card h4 {
+            margin-bottom: 6px;
+            color: #0077b6;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+        .clima-info {
+            margin-bottom: 6px;
+            font-size: 0.72rem;
+            color: #333;
+        }
+        .clima-info p {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #eee;
+            padding: 2px 0;
+        }
+        .flag-badge {
+            display: block;
+            padding: 4px 6px;
+            border-radius: 4px;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 0.72rem;
+            text-align: center;
+            width: 100%;
+        }
 
-                res_flag = session.get(f"{BASE_URL_112}/BeachFlag?idmun={mun_id}", timeout=4)
-                if res_flag.status_code == 200:
-                    items = res_flag.json()
-                    items = items if isinstance(items, list) else [items]
+        @media (max-width: 768px) {
+            #toggle-search {
+                display: block;
+            }
+            #search-panel {
+                position: absolute;
+                right: 0;
+                top: 0;
+                height: 100%;
+                width: 190px;
+                transform: translateX(100%);
+                box-shadow: -4px 0 12px rgba(0,0,0,0.25);
+            }
+            #search-panel.open {
+                transform: translateX(0);
+            }
+            #last-update {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
 
-                    for p in items:
-                        nombre_playa = p.get("name", "PLAYA")
-                        coords = PLAYAS_COORDS.get(nombre_playa.upper(), {"lat": 37.5678, "lng": -1.2515})
-                        flag_info = traducir_bandera(p.get("flag", 100))
-                        sea_text = traducir_estado_mar(p.get("seaState", 0))
-                        clima = obtener_clima(coords["lat"], coords["lng"], mun_nombre)
+    <div id="header">
+        <h1>🏖️ Playas de Murcia</h1>
+        <div class="header-right">
+            <div id="last-update">Cargando...</div>
+            <button id="toggle-search" onclick="togglePanel()">🔍 Buscar</button>
+        </div>
+    </div>
 
-                        playas_procesadas.append({
-                            "nombre": nombre_playa,
-                            "municipio": mun_nombre,
-                            "lat": coords["lat"],
-                            "lng": coords["lng"],
-                            "cielo": clima["cielo"],
-                            "temperatura": clima["temperatura"],
-                            "humedad": clima["humedad"],
-                            "prob_lluvia": clima["prob_lluvia"],
-                            "nubes": clima["nubes"],
-                            "viento": clima["viento"],
-                            "altura_olas": clima["altura_olas"],
-                            "estado_mar": sea_text,
-                            "bandera": {
-                                "color": flag_info["texto"],
-                                "texto": flag_info["texto"],
-                                "hex": flag_info["hex"]
-                            }
-                        })
-            
-            if playas_procesadas:
-                CACHE_PLAYAS_EMERGENCIA = playas_procesadas
+    <div id="content">
+        <div id="map"></div>
 
-        if not playas_procesadas:
-            playas_procesadas = CACHE_PLAYAS_EMERGENCIA
+        <div id="search-panel">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Buscar playa..." oninput="filtrarPlayas()">
+            </div>
+            <ul id="beach-list"></ul>
+        </div>
+    </div>
 
-        return jsonify({
-            "status": "ok",
-            "ultima_actualizacion": datetime.now().strftime("%H:%M:%S"),
-            "playas": playas_procesadas
-        })
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const boundsMurcia = L.latLngBounds(
+            L.latLng(37.3000, -1.7500),
+            L.latLng(37.9000, -0.6000)
+        );
 
-    except Exception as e:
-        print(f"[ERROR EN RENDER/112]: {e}")
-        return jsonify({
-            "status": "ok",
-            "ultima_actualizacion": datetime.now().strftime("%H:%M:%S"),
-            "playas": CACHE_PLAYAS_EMERGENCIA
-        })
+        const map = L.map('map', {
+            center: [37.6200, -1.0000],
+            zoom: 10,
+            minZoom: 9,
+            maxZoom: 15,
+            maxBounds: boundsMurcia,
+            maxBoundsViscosity: 0.9
+        });
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let todasLasPlayas = [];
+        let marcadores = {};
+
+        function togglePanel() {
+            const panel = document.getElementById('search-panel');
+            panel.classList.toggle('open');
+        }
+
+        function crearIconoConNombre(colorHex, nombrePlaya) {
+            const html = `
+                <div class="custom-pin-container">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22">
+                        <path fill="${colorHex}" stroke="#FFFFFF" stroke-width="1.5" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                        <circle cx="12" cy="9" r="2.5" fill="#FFFFFF"/>
+                    </svg>
+                    <span class="pin-label">${nombrePlaya}</span>
+                </div>
+            `;
+
+            return L.divIcon({
+                className: '',
+                html: html,
+                iconSize: [80, 40],
+                iconAnchor: [40, 22],
+                popupAnchor: [0, -20]
+            });
+        }
+
+        async function cargarPlayas() {
+            try {
+                const response = await fetch('/api/playas');
+                const data = await response.json();
+
+                if (data.status === 'ok') {
+                    document.getElementById('last-update').innerText = `Act: ${data.ultima_actualizacion}`;
+                    todasLasPlayas = data.playas;
+
+                    todasLasPlayas.forEach((playa, index) => {
+                        const icon = crearIconoConNombre(playa.bandera.hex, playa.nombre);
+                        
+                        const popupContent = `
+                            <div class="popup-card">
+                                <h3>${playa.nombre}</h3>
+                                <h4>📍 ${playa.municipio}</h4>
+                                <div class="clima-info">
+                                    <p><span>Cielo:</span> <strong>${playa.cielo}</strong></p>
+                                    <p><span>Temp:</span> <strong>${playa.temperatura}</strong></p>
+                                    <p><span>Humedad:</span> <strong>${playa.humedad}</strong></p>
+                                    <p><span>Lluvia:</span> <strong>${playa.prob_lluvia}</strong></p>
+                                    <p><span>Viento:</span> <strong>${playa.viento}</strong></p>
+                                    <p><span>Olas:</span> <strong>${playa.altura_olas}</strong></p>
+                                </div>
+                                <div class="flag-badge" style="background-color: ${playa.bandera.hex};">
+                                    ${playa.bandera.texto}
+                                </div>
+                            </div>
+                        `;
+
+                        const marker = L.marker([playa.lat, playa.lng], { icon: icon })
+                            .addTo(map)
+                            .bindPopup(popupContent);
+
+                        marcadores[index] = marker;
+                    });
+
+                    renderListaPlayas(todasLasPlayas);
+                }
+            } catch (error) {
+                console.error('Error cargando playas:', error);
+                document.getElementById('last-update').innerText = 'Error conexión';
+            }
+        }
+
+        function renderListaPlayas(playas) {
+            const listEl = document.getElementById('beach-list');
+            listEl.innerHTML = '';
+
+            playas.forEach(playa => {
+                const index = todasLasPlayas.indexOf(playa);
+                const li = document.createElement('li');
+                li.className = 'beach-item';
+                li.onclick = () => {
+                    seleccionarPlaya(index);
+                    if (window.innerWidth <= 768) {
+                        togglePanel();
+                    }
+                };
+
+                li.innerHTML = `
+                    <div class="beach-info">
+                        <span class="beach-name">${playa.nombre}</span>
+                        <span class="beach-mun">${playa.municipio}</span>
+                    </div>
+                    <span class="beach-flag-dot" style="background-color: ${playa.bandera.hex};"></span>
+                `;
+                listEl.appendChild(li);
+            });
+        }
+
+        function filtrarPlayas() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filtradas = todasLasPlayas.filter(p => 
+                p.nombre.toLowerCase().includes(query) || 
+                p.municipio.toLowerCase().includes(query)
+            );
+            renderListaPlayas(filtradas);
+        }
+
+        function seleccionarPlaya(index) {
+            const playa = todasLasPlayas[index];
+            const marker = marcadores[index];
+
+            if (marker) {
+                map.flyTo([playa.lat, playa.lng], 13, { duration: 1.2 });
+                marker.openPopup();
+            }
+        }
+
+        cargarPlayas();
+    </script>
+</body>
+</html>

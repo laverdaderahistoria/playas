@@ -195,11 +195,19 @@ def api_playas():
         if not playas_procesadas:
             playas_procesadas = CACHE_PLAYAS_EMERGENCIA
 
-        return jsonify(playas_procesadas)
+        return jsonify({
+            "status": "ok",
+            "ultima_actualizacion": datetime.now().strftime("%H:%M:%S"),
+            "playas": playas_procesadas
+        })
 
     except Exception as e:
         print(f"[ERROR EN RENDER/112]: {e}")
-        return jsonify(CACHE_PLAYAS_EMERGENCIA)
+        return jsonify({
+            "status": "ok",
+            "ultima_actualizacion": datetime.now().strftime("%H:%M:%S"),
+            "playas": CACHE_PLAYAS_EMERGENCIA
+        })
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
