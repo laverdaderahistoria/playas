@@ -8,11 +8,7 @@ import traceback
 
 app = Flask(__name__)
 
-CACHE_PLAYAS_DATA = {
-    "timestamp": None,
-    "data": []
-}
-CACHE_EXPIRATION_SECS = 0  # Sin caché para pruebas en tiempo real
+CACHE_EXPIRATION_SECS = 0  # Sin caché para depuración en tiempo real
 
 def limpiar_texto(texto):
     if not texto:
@@ -110,22 +106,32 @@ def index():
 
 @app.route("/api/debug-112")
 def debug_112():
-    # Probamos varios endpoints posibles de la API
-    urls = [
-        "https://web-app.112rmurcia.com/copla-service/copla/state/all",
-        "https://web-app.112rmurcia.com/copla-service/copla/beaches",
-        "https://web-app.112rmurcia.com/copla-service/copla/states",
-        "https://web-app.112rmurcia.com/copla-service/copla/state"
-    ]
-    resultados = {}
+    session = requests.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
         "Referer": "https://noticias.112rmurcia.es/"
     }
+    session.headers.update(headers)
+    
+    # Primero inicializamos sesión visitando la web origen para obtener cookies
+    try:
+        session.get("https://noticias.112rmurcia.es/", timeout=5)
+    except:
+        pass
+
+    urls = [
+        "https://web-app.112rmurcia.com/copla-service/copla/state/all",
+        "https://web-app.112rmurcia.com/copla-service/copla/beaches",
+        "https://web-app.112rmurcia.com/copla-service/copla/states",
+        "https://web-app.112rmurcia.com/copla-service/copla/open/beaches",
+        "https://web-app.112rmurcia.com/copla-service/copla/open/states",
+        "https://web-app.112rmurcia.com/copla-service/copla/map/beaches"
+    ]
+    resultados = {}
     for u in urls:
         try:
-            r = requests.get(u, headers=headers, timeout=5)
+            r = session.get(u, timeout=5)
             resultados[u] = {"status": r.status_code, "data": r.json() if r.status_code == 200 else r.text}
         except Exception as e:
             resultados[u] = {"error": str(e)}
@@ -181,20 +187,25 @@ def obtener_clima_por_municipio(municipio, lat, lng):
 
 def obtener_estados_banderas_112():
     banderas = {}
-    # Probamos endpoint alternativo si /state/all era solo metadatos, o buscamos dentro de él
-    urls_a_probar = [
-        "https://web-app.112rmurcia.com/copla-service/copla/state/all",
-        "https://web-app.112rmurcia.com/copla-service/copla/beaches",
-        "https://web-app.112rmurcia.com/copla-service/copla/states"
-    ]
-    
+    session = requests.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
         "Referer": "https://noticias.112rmurcia.es/"
     }
+    session.headers.update(headers)
     
-    # Mapa de IDs de bandera según la especificación de la API (StatesFlag)
+    try:
+        session.get("https://noticias.112rmurcia.es/", timeout=5)
+    except:
+        pass
+
+    urls_a_probar = [
+        "https://web-app.112rmurcia.com/copla-service/copla/open/beaches",
+        "https://web-app.112rmurcia.com/copla-service/copla/beaches",
+        "https://web-app.112rmurcia.com/copla-service/copla/state/all"
+    ]
+    
     mapa_flags_id = {
         100: {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"},
         200: {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"},
@@ -205,16 +216,13 @@ def obtener_estados_banderas_112():
     
     for url_api in urls_a_probar:
         try:
-            response = requests.get(url_api, headers=headers, timeout=5)
+            response = session.get(url_api, timeout=5)
             if response.status_code == 200:
                 data = response.json()
-                
-                # Buscamos recursivamente listas de elementos que representen playas o estados de playas
                 items = []
                 if isinstance(data, list):
                     items = data
                 elif isinstance(data, dict):
-                    # Comprobamos si hay alguna lista dentro del diccionario
                     for k, v in data.items():
                         if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict):
                             items.extend(v)
@@ -226,7 +234,6 @@ def obtener_estados_banderas_112():
                             nombre_playa = item[k]
                             break
                     
-                    # Buscar ID de bandera o texto de bandera
                     flag_id = None
                     for k in ["flaId", "flagId", "estadoId", "stateFlag", "banderaId"]:
                         if k in item and item[k] is not None:
@@ -242,7 +249,6 @@ def obtener_estados_banderas_112():
                             pass
                 
                 if banderas:
-                    print(f"[ÉXITO] Se obtuvieron {len(banderas)} estados desde {url_api}")
                     break
         except Exception as e:
             continue
@@ -266,13 +272,11 @@ def api_playas():
             nombre_clean = limpiar_texto(playa["nombre"])
             bandera = BANDERA_DEFECTO
             
-            # Coincidencia exacta o parcial
             for k, v in banderas_112.items():
                 if nombre_clean == k or nombre_clean in k or k in nombre_clean:
                     bandera = v
                     break
             
-            # Coincidencia por palabra clave
             if bandera["color"] == "Azul":
                 palabras_playa = set(nombre_clean.split())
                 for k, v in banderas_112.items():
