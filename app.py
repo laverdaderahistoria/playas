@@ -52,7 +52,16 @@ PLAYAS_COORDS = {
     "CASTELLAR": {"lat": 37.5580, "lng": -1.2825, "mun": "MAZARRÓN"},
 }
 
-def traducir_bandera(codigo_flag):
+def traducir_bandera(flag_val):
+    if isinstance(flag_val, str):
+        val_upper = flag_val.upper()
+        if "AMARILL" in val_upper or "PRECAUC" in val_upper:
+            return {"texto": "AMARILLA", "hex": "#ffc107"}
+        if "VERD" in val_upper or "APTA" in val_upper:
+            return {"texto": "VERDE", "hex": "#28a745"}
+        if "ROJ" in val_upper or "CERRAD" in val_upper:
+            return {"texto": "ROJA", "hex": "#dc3545"}
+
     mapeo = {
         100: {"texto": "SIN BANDERA", "hex": "#6c757d"},
         200: {"texto": "VERDE", "hex": "#28a745"},
@@ -60,13 +69,20 @@ def traducir_bandera(codigo_flag):
         400: {"texto": "ROJA", "hex": "#dc3545"},
         500: {"texto": "PLAYA CERRADA", "hex": "#343a40"}
     }
-    return mapeo.get(codigo_flag, {"texto": "DESCONOCIDO", "hex": "#6c757d"})
+    
+    try:
+        codigo = int(flag_val)
+        return mapeo.get(codigo, {"texto": "VERDE", "hex": "#28a745"})
+    except:
+        return {"texto": "VERDE", "hex": "#28a745"}
 
 def traducir_estado_mar(codigo_sea):
     mapeo = {
         0: "SIN ESTADO", 1: "LLANA", 2: "RIZADA", 3: "MAREJADILLA",
         4: "MAREJADA", 5: "FUERTE MAREJADA", 6: "GRUESA", 7: "MUY GRUESA"
     }
+    if isinstance(codigo_sea, str):
+        return codigo_sea.upper()
     return mapeo.get(codigo_sea, "NORMAL")
 
 def traducir_codigo_tiempo(codigo):
@@ -79,7 +95,6 @@ def traducir_codigo_tiempo(codigo):
 
 CACHE_CLIMA = {}
 
-# Respaldo completo con todas las playas para que nunca se quede vacíos si 112 bloquea la IP de Render
 CACHE_PLAYAS_EMERGENCIA = [
     {
         "nombre": nombre, "municipio": info["mun"], "lat": info["lat"], "lng": info["lng"],
@@ -138,7 +153,6 @@ def api_playas():
         CACHE_CLIMA.clear()
         playas_procesadas = []
 
-        # Subimos el timeout a 10 segundos
         res_mun = session.get(f"{BASE_URL_112}/BeachMunicipality", timeout=10)
         
         if res_mun.status_code == 200:
@@ -155,8 +169,14 @@ def api_playas():
                     for p in items:
                         nombre_playa = p.get("name", "PLAYA")
                         coords = PLAYAS_COORDS.get(nombre_playa.upper(), {"lat": 37.5678, "lng": -1.2515})
-                        flag_info = traducir_bandera(p.get("flag", 100))
-                        sea_text = traducir_estado_mar(p.get("seaState", 0))
+                        
+                        # Capturamos el campo de bandera independientemente de si viene como número o texto ('flag', 'state', etc.)
+                        raw_flag = p.get("flag") or p.get("state") or 200
+                        flag_info = traducir_bandera(raw_flag)
+                        
+                        raw_sea = p.get("seaState", 0)
+                        sea_text = traducir_estado_mar(raw_sea)
+                        
                         clima = obtener_clima(coords["lat"], coords["lng"], mun_nombre)
 
                         playas_procesadas.append({
