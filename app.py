@@ -26,30 +26,30 @@ def limpiar_texto(texto):
 
 PLAYAS_COORDS = {
     # Águilas
-    "CALABARDINA": {"lat": 37.4317, "lng": -1.5019},
-    "LA COLONIA": {"lat": 37.4032, "lng": -1.5831},
-    "LA CABAÑA": {"lat": 37.4010, "lng": -1.5900},
-    "HORNILLO": {"lat": 37.4090, "lng": -1.5680},
-    "PONIENTE I": {"lat": 37.4025, "lng": -1.5862},
-    "CALARREONA": {"lat": 37.3865, "lng": -1.6186},
-    "LAS DELICIAS I": {"lat": 37.4070, "lng": -1.5730},
-    "PONIENTE II": {"lat": 37.4020, "lng": -1.5870},
-    "LA HIGUERICA": {"lat": 37.3795, "lng": -1.6248},
-    "LAS DELICIAS II": {"lat": 37.4080, "lng": -1.5720},
-    "CASICA VERDE": {"lat": 37.3951, "lng": -1.6033},
-    "LA CAROLINA": {"lat": 37.3762, "lng": -1.6283},
-    "LEVANTE": {"lat": 37.4048, "lng": -1.5778},
-    "MATALENTISCO": {"lat": 37.3977, "lng": -1.6177},
+    "CALABARDINA": {"lat": 37.4317, "lng": -1.5019, "mun": "ÁGUILAS"},
+    "LA COLONIA": {"lat": 37.4032, "lng": -1.5831, "mun": "ÁGUILAS"},
+    "LA CABAÑA": {"lat": 37.4010, "lng": -1.5900, "mun": "ÁGUILAS"},
+    "HORNILLO": {"lat": 37.4090, "lng": -1.5680, "mun": "ÁGUILAS"},
+    "PONIENTE I": {"lat": 37.4025, "lng": -1.5862, "mun": "ÁGUILAS"},
+    "CALARREONA": {"lat": 37.3865, "lng": -1.6186, "mun": "ÁGUILAS"},
+    "LAS DELICIAS I": {"lat": 37.4070, "lng": -1.5730, "mun": "ÁGUILAS"},
+    "PONIENTE II": {"lat": 37.4020, "lng": -1.5870, "mun": "ÁGUILAS"},
+    "LA HIGUERICA": {"lat": 37.3795, "lng": -1.6248, "mun": "ÁGUILAS"},
+    "LAS DELICIAS II": {"lat": 37.4080, "lng": -1.5720, "mun": "ÁGUILAS"},
+    "CASICA VERDE": {"lat": 37.3951, "lng": -1.6033, "mun": "ÁGUILAS"},
+    "LA CAROLINA": {"lat": 37.3762, "lng": -1.6283, "mun": "ÁGUILAS"},
+    "LEVANTE": {"lat": 37.4048, "lng": -1.5778, "mun": "ÁGUILAS"},
+    "MATALENTISCO": {"lat": 37.3977, "lng": -1.6177, "mun": "ÁGUILAS"},
     # Mazarrón
-    "EL MOJON": {"lat": 37.5752, "lng": -1.2335},
-    "LA REYA": {"lat": 37.5595, "lng": -1.2910},
-    "BOLNUEVO": {"lat": 37.5618, "lng": -1.3025},
-    "EL ALAMILLO": {"lat": 37.5710, "lng": -1.2430},
-    "BAHIA": {"lat": 37.5622, "lng": -1.2642},
-    "PUERTO - RIHUETE": {"lat": 37.5678, "lng": -1.2515},
-    "NARES": {"lat": 37.5588, "lng": -1.2745},
-    "PERCHELES": {"lat": 37.5255, "lng": -1.3535},
-    "CASTELLAR": {"lat": 37.5580, "lng": -1.2825},
+    "EL MOJON": {"lat": 37.5752, "lng": -1.2335, "mun": "MAZARRÓN"},
+    "LA REYA": {"lat": 37.5595, "lng": -1.2910, "mun": "MAZARRÓN"},
+    "BOLNUEVO": {"lat": 37.5618, "lng": -1.3025, "mun": "MAZARRÓN"},
+    "EL ALAMILLO": {"lat": 37.5710, "lng": -1.2430, "mun": "MAZARRÓN"},
+    "BAHIA": {"lat": 37.5622, "lng": -1.2642, "mun": "MAZARRÓN"},
+    "PUERTO - RIHUETE": {"lat": 37.5678, "lng": -1.2515, "mun": "MAZARRÓN"},
+    "NARES": {"lat": 37.5588, "lng": -1.2745, "mun": "MAZARRÓN"},
+    "PERCHELES": {"lat": 37.5255, "lng": -1.3535, "mun": "MAZARRÓN"},
+    "CASTELLAR": {"lat": 37.5580, "lng": -1.2825, "mun": "MAZARRÓN"},
 }
 
 def traducir_bandera(codigo_flag):
@@ -79,25 +79,14 @@ def traducir_codigo_tiempo(codigo):
 
 CACHE_CLIMA = {}
 
+# Respaldo completo con todas las playas para que nunca se quede vacíos si 112 bloquea la IP de Render
 CACHE_PLAYAS_EMERGENCIA = [
     {
-        "nombre": "LA COLONIA", "municipio": "ÁGUILAS", "lat": 37.4032, "lng": -1.5831,
-        "cielo": "Despejado", "temperatura": "25°C", "humedad": "50%", "prob_lluvia": "0%",
-        "nubes": "10%", "viento": "10 km/h", "altura_olas": "0.2 m", "estado_mar": "LLANA",
-        "bandera": {"color": "VERDE", "texto": "VERDE", "hex": "#28a745"}
-    },
-    {
-        "nombre": "LEVANTE", "municipio": "ÁGUILAS", "lat": 37.4048, "lng": -1.5778,
-        "cielo": "Despejado", "temperatura": "25°C", "humedad": "50%", "prob_lluvia": "0%",
-        "nubes": "10%", "viento": "10 km/h", "altura_olas": "0.2 m", "estado_mar": "LLANA",
-        "bandera": {"color": "VERDE", "texto": "VERDE", "hex": "#28a745"}
-    },
-    {
-        "nombre": "PUERTO - RIHUETE", "municipio": "MAZARRÓN", "lat": 37.5678, "lng": -1.2515,
+        "nombre": nombre, "municipio": info["mun"], "lat": info["lat"], "lng": info["lng"],
         "cielo": "Despejado", "temperatura": "26°C", "humedad": "48%", "prob_lluvia": "0%",
-        "nubes": "5%", "viento": "12 km/h", "altura_olas": "0.3 m", "estado_mar": "RIZADA",
+        "nubes": "5%", "viento": "10 km/h", "altura_olas": "0.2 m", "estado_mar": "LLANA",
         "bandera": {"color": "VERDE", "texto": "VERDE", "hex": "#28a745"}
-    }
+    } for nombre, info in PLAYAS_COORDS.items()
 ]
 
 def obtener_clima(lat, lng, municipio):
@@ -149,7 +138,8 @@ def api_playas():
         CACHE_CLIMA.clear()
         playas_procesadas = []
 
-        res_mun = session.get(f"{BASE_URL_112}/BeachMunicipality", timeout=4)
+        # Subimos el timeout a 10 segundos
+        res_mun = session.get(f"{BASE_URL_112}/BeachMunicipality", timeout=10)
         
         if res_mun.status_code == 200:
             municipios = res_mun.json()
@@ -157,7 +147,7 @@ def api_playas():
                 mun_id = mun.get("id")
                 mun_nombre = mun.get("name", "").upper()
 
-                res_flag = session.get(f"{BASE_URL_112}/BeachFlag?idmun={mun_id}", timeout=4)
+                res_flag = session.get(f"{BASE_URL_112}/BeachFlag?idmun={mun_id}", timeout=10)
                 if res_flag.status_code == 200:
                     items = res_flag.json()
                     items = items if isinstance(items, list) else [items]
