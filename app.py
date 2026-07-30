@@ -4,6 +4,7 @@ import re
 import unicodedata
 import requests
 from datetime import datetime
+import traceback
 
 app = Flask(__name__)
 
@@ -158,7 +159,7 @@ def obtener_clima_por_municipio(municipio, lat, lng):
 
 def obtener_estados_banderas_112():
     banderas = {}
-    url_api = "https://web-app.112rmurcia.com/copla-service/copla/state/all"[cite: 1]
+    url_api = "https://web-app.112rmurcia.com/copla-service/copla/state/all"
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -172,25 +173,26 @@ def obtener_estados_banderas_112():
         
         if response.status_code == 200:
             data = response.json()
-            for item in data:
-                nombre_playa = item.get("nombre") or item.get("name") or item.get("beachName")
-                estado_info = item.get("estado") or item.get("state") or item.get("flag") or item.get("color")
-                
-                if nombre_playa:
-                    n_clean = limpiar_texto(nombre_playa)
-                    e_str = str(estado_info).lower()
+            if isinstance(data, list):
+                for item in data:
+                    nombre_playa = item.get("nombre") or item.get("name") or item.get("beachName")
+                    estado_info = item.get("estado") or item.get("state") or item.get("flag") or item.get("color")
                     
-                    if any(v in e_str for v in ["1", "verde", "apta", "green"]):
-                        info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
-                    elif any(v in e_str for v in ["2", "amarilla", "precaucion", "yellow"]):
-                        info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
-                    elif any(v in e_str for v in ["3", "roja", "prohibido", "red"]):
-                        info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
-                    else:
-                        info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                    if nombre_playa:
+                        n_clean = limpiar_texto(nombre_playa)
+                        e_str = str(estado_info).lower()
                         
-                    banderas[n_clean] = info
-            print(f"[ÉXITO] Se han obtenido {len(banderas)} estados de playas desde la API oficial.")
+                        if any(v in e_str for v in ["1", "verde", "apta", "green"]):
+                            info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
+                        elif any(v in e_str for v in ["2", "amarilla", "precaucion", "yellow"]):
+                            info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
+                        elif any(v in e_str for v in ["3", "roja", "prohibido", "red"]):
+                            info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
+                        else:
+                            info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                            
+                        banderas[n_clean] = info
+                print(f"[ÉXITO] Se han obtenido {len(banderas)} estados de playas desde la API oficial.")
         else:
             print(f"[!] Error en la API del 112. Código HTTP: {response.status_code}")
             
@@ -202,59 +204,69 @@ def obtener_estados_banderas_112():
 @app.route("/api/playas")
 def api_playas():
     global CACHE_PLAYAS_DATA
-    ahora = datetime.now()
-    
-    if CACHE_PLAYAS_DATA["data"] and CACHE_PLAYAS_DATA["timestamp"] and (ahora - CACHE_PLAYAS_DATA["timestamp"]).seconds < CACHE_EXPIRATION_SECS:
+    try:
+        ahora = datetime.now()
+        
+        if CACHE_PLAYAS_DATA["data"] and CACHE_PLAYAS_DATA["timestamp"] and (ahora - CACHE_PLAYAS_DATA["timestamp"]).seconds < CACHE_EXPIRATION_SECS:
+            return jsonify({
+                "status": "ok",
+                "ultima_actualizacion": CACHE_PLAYAS_DATA["timestamp"].strftime("%H:%M:%S"),
+                "playas": CACHE_PLAYAS_DATA["data"]
+            })
+
+        CACHE_CLIMA.clear()
+        banderas_112 = obtener_estados_banderas_112()
+        playas_procesadas = []
+
+        BANDERA_DEFECTO = {
+            "color": "Azul",
+            "texto": "Sin Bandera",
+            "hex": "#0077b6"
+        }
+
+        for playa in PLAYAS_BASE:
+            nombre_clean = limpiar_texto(playa["nombre"])
+            
+            bandera = BANDERA_DEFECTO
+            for k, v in banderas_112.items():
+                if nombre_clean in k or k in nombre_clean:
+                    bandera = v
+                    break
+            
+            clima = obtener_clima_por_municipio(playa["municipio"], playa["lat"], playa["lng"])
+            
+            playas_procesadas.append({
+                "nombre": playa["nombre"],
+                "municipio": playa["municipio"],
+                "lat": playa["lat"],
+                "lng": playa["lng"],
+                "cielo": clima["cielo"],
+                "temperatura": clima["temperatura"],
+                "humedad": clima["humedad"],
+                "prob_lluvia": clima["prob_lluvia"],
+                "nubes": clima["nubes"],
+                "viento": clima["viento"],
+                "altura_olas": clima["altura_olas"],
+                "bandera": bandera
+            })
+
+        CACHE_PLAYAS_DATA["data"] = playas_procesadas
+        CACHE_PLAYAS_DATA["timestamp"] = ahora
+
         return jsonify({
             "status": "ok",
-            "ultima_actualizacion": CACHE_PLAYAS_DATA["timestamp"].strftime("%H:%M:%S"),
-            "playas": CACHE_PLAYAS_DATA["data"]
+            "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
+            "playas": playas_procesadas
         })
-
-    CACHE_CLIMA.clear()
-    banderas_112 = obtener_estados_banderas_112()
-    playas_procesadas = []
-
-    BANDERA_DEFECTO = {
-        "color": "Azul",
-        "texto": "Sin Bandera",
-        "hex": "#0077b6"
-    }
-
-    for playa in PLAYAS_BASE:
-        nombre_clean = limpiar_texto(playa["nombre"])
-        
-        bandera = BANDERA_DEFECTO
-        for k, v in banderas_112.items():
-            if nombre_clean in k or k in nombre_clean:
-                bandera = v
-                break
-        
-        clima = obtener_clima_por_municipio(playa["municipio"], playa["lat"], playa["lng"])
-        
-        playas_procesadas.append({
-            "nombre": playa["nombre"],
-            "municipio": playa["municipio"],
-            "lat": playa["lat"],
-            "lng": playa["lng"],
-            "cielo": clima["cielo"],
-            "temperatura": clima["temperatura"],
-            "humedad": clima["humedad"],
-            "prob_lluvia": clima["prob_lluvia"],
-            "nubes": clima["nubes"],
-            "viento": clima["viento"],
-            "altura_olas": clima["altura_olas"],
-            "bandera": bandera
-        })
-
-    CACHE_PLAYAS_DATA["data"] = playas_procesadas
-    CACHE_PLAYAS_DATA["timestamp"] = ahora
-
-    return jsonify({
-        "status": "ok",
-        "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
-        "playas": playas_procesadas
-    })
+    except Exception as e:
+        print(f"[ERROR CRITICO EN /api/playas]: {e}")
+        traceback.print_exc()
+        # Devolvemos un JSON estructurado con el error en lugar de colgar el servidor con un 500 HTML
+        return jsonify({
+            "status": "error",
+            "mensaje": str(e),
+            "playas": []
+        }), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=8000)
