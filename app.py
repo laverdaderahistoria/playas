@@ -25,7 +25,6 @@ def limpiar_texto(texto):
     texto = re.sub(r'\s+', ' ', texto).strip()
     return texto
 
-# Base de coordenadas estáticas para posicionar los marcadores en el mapa
 PLAYAS_COORDS = {
     # Águilas
     "CALABARDINA": {"lat": 37.4317, "lng": -1.5019},
@@ -52,11 +51,9 @@ PLAYAS_COORDS = {
     "NARES": {"lat": 37.5588, "lng": -1.2745},
     "PERCHELES": {"lat": 37.5255, "lng": -1.3535},
     "CASTELLAR": {"lat": 37.5580, "lng": -1.2825},
-    # Cartagena, San Javier, etc. (puedes añadir o dejar coordenadas por defecto)
 }
 
 def traducir_bandera(codigo_flag):
-    # Mapeo oficial extraído de /copla/state/all
     mapeo = {
         100: {"texto": "SIN BANDERA", "hex": "#6c757d"},
         200: {"texto": "VERDE", "hex": "#28a745"},
@@ -82,6 +79,7 @@ def traducir_codigo_tiempo(codigo):
     return traducciones.get(codigo, "Despejado")
 
 CACHE_CLIMA = {}
+CACHE_PLAYAS_EMERGENCIA = []
 
 def obtener_clima(lat, lng, municipio):
     m_key = limpiar_texto(municipio)
@@ -127,59 +125,56 @@ def index():
 
 @app.route("/api/playas")
 def api_playas():
+    global CACHE_PLAYAS_EMERGENCIA
     try:
         CACHE_CLIMA.clear()
         playas_procesadas = []
 
-        # 1. Obtener lista de municipios de la API del 112
-        res_mun = session.get(f"{BASE_URL_112}/BeachMunicipality", timeout=5)
-        if res_mun.status_code != 200:
-            return jsonify({"status": "error", "mensaje": "No se pudo conectar con el 112"}), 500
+        res_mun = session.get(f"{BASE_URL_112}/BeachMunicipality", timeout=4)
+        
+        if res_mun.status_code == 200:
+            municipios = res_mun.json()
+            for mun in municipios:
+                mun_id = mun.get("id")
+                mun_nombre = mun.get("name", "").upper()
 
-        municipios = res_mun.json()
+                res_flag = session.get(f"{BASE_URL_112}/BeachFlag?idmun={mun_id}", timeout=4)
+                if res_flag.status_code == 200:
+                    items = res_flag.json()
+                    items = items if isinstance(items, list) else [items]
 
-        # 2. Recorrer cada municipio para obtener sus playas y banderas reales
-        for mun in municipios:
-            mun_id = mun.get("id")
-            mun_nombre = mun.get("name", "").upper()
+                    for p in items:
+                        nombre_playa = p.get("name", "PLAYA")
+                        coords = PLAYAS_COORDS.get(nombre_playa.upper(), {"lat": 37.5678, "lng": -1.2515})
+                        flag_info = traducir_bandera(p.get("flag", 100))
+                        sea_text = traducir_estado_mar(p.get("seaState", 0))
+                        clima = obtener_clima(coords["lat"], coords["lng"], mun_nombre)
 
-            res_flag = session.get(f"{BASE_URL_112}/BeachFlag?idmun={mun_id}", timeout=5)
-            if res_flag.status_code == 200:
-                playas_data = res_flag.json()
-                items = playas_data if isinstance(playas_data, list) else [playas_data]
+                        playas_procesadas.append({
+                            "nombre": nombre_playa,
+                            "municipio": mun_nombre,
+                            "lat": coords["lat"],
+                            "lng": coords["lng"],
+                            "cielo": clima["cielo"],
+                            "temperatura": clima["temperatura"],
+                            "humedad": clima["humedad"],
+                            "prob_lluvia": clima["prob_lluvia"],
+                            "nubes": clima["nubes"],
+                            "viento": clima["viento"],
+                            "altura_olas": clima["altura_olas"],
+                            "estado_mar": sea_text,
+                            "bandera": {
+                                "color": flag_info["texto"],
+                                "texto": flag_info["texto"],
+                                "hex": flag_info["hex"]
+                            }
+                        })
+            
+            if playas_procesadas:
+                CACHE_PLAYAS_EMERGENCIA = playas_procesadas
 
-                for p in items:
-                    nombre_playa = p.get("name", "PLAYA")
-                    
-                    # Obtener coordenadas guardadas o usar una por defecto en Murcia
-                    coords = PLAYAS_COORDS.get(nombre_playa.upper(), {"lat": 37.5678, "lng": -1.2515})
-                    
-                    # Traducir bandera y estado del mar oficiales
-                    flag_info = traducir_bandera(p.get("flag", 100))
-                    sea_text = traducir_estado_mar(p.get("seaState", 0))
-
-                    # Obtener datos meteorológicos de Open-Meteo
-                    clima = obtener_clima(coords["lat"], coords["lng"], mun_nombre)
-
-                    playas_procesadas.append({
-                        "nombre": nombre_playa,
-                        "municipio": mun_nombre,
-                        "lat": coords["lat"],
-                        "lng": coords["lng"],
-                        "cielo": clima["cielo"],
-                        "temperatura": clima["temperatura"],
-                        "humedad": clima["humedad"],
-                        "prob_lluvia": clima["prob_lluvia"],
-                        "nubes": clima["nubes"],
-                        "viento": clima["viento"],
-                        "altura_olas": clima["altura_olas"],
-                        "estado_mar": sea_text,
-                        "bandera": {
-                            "color": flag_info["texto"],
-                            "texto": flag_info["texto"],
-                            "hex": flag_info["hex"]
-                        }
-                    })
+        if not playas_procesadas and CACHE_PLAYAS_EMERGENCIA:
+            playas_procesadas = CACHE_PLAYAS_EMERGENCIA
 
         return jsonify({
             "status": "ok",
@@ -188,7 +183,13 @@ def api_playas():
         })
 
     except Exception as e:
-        print(f"[ERROR CRITICO]: {e}")
+        print(f"[ERROR EN RENDER/112]: {e}")
+        if CACHE_PLAYAS_EMERGENCIA:
+            return jsonify({
+                "status": "ok_fallback",
+                "mensaje": "Sirviendo datos de respaldo por restricción de red",
+                "playas": CACHE_PLAYAS_EMERGENCIA
+            })
         return jsonify({"status": "error", "mensaje": str(e), "playas": []}), 500
 
 if __name__ == "__main__":
