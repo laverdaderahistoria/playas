@@ -195,47 +195,52 @@ def obtener_estados_banderas_112():
     banderas = {}
     url_112 = "http://112rm.carm.es/"
     
-    municipios_validos = [
-        "aguilas", "cartagena", "la union", "lorca", 
-        "los alcazares", "mazarron", "san javier", "san pedro del pinatar"
-    ]
-    current_municipio = ""
-
     try:
         with sync_playwright() as p:
-            # Sigue usando Chromium sin problema
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(url_112, timeout=15000, wait_until="domcontentloaded")
+            page.goto(url_112, timeout=20000, wait_until="domcontentloaded")
             
-            texto_pagina = page.inner_text('body')
-            lineas = [l.strip() for l in texto_pagina.split('\n') if l.strip()]
+            page.wait_for_selector("body", timeout=5000)
             
-            for i, linea in enumerate(lineas):
-                linea_clean = limpiar_texto(linea)
-                estado_lower = linea.lower()
+            current_municipio = ""
+            municipios_validos = [
+                "aguilas", "cartagena", "la union", "lorca", 
+                "los alcazares", "mazarron", "san javier", "san pedro del pinatar"
+            ]
 
-                # Si leemos el nombre de un municipio, lo guardamos para evitar conflictos 
-                # (ej: la playa "El Mojón" existe en Mazarrón y en San Pedro del Pinatar)
+            texto_completo = page.inner_text('body')
+            lineas = [l.strip() for l in texto_completo.split('\n') if l.strip()]
+            
+            i = 0
+            while i < len(lineas):
+                linea = lineas[i]
+                linea_clean = limpiar_texto(linea)
+                
                 if linea_clean in municipios_validos:
                     current_municipio = linea_clean
+                    i += 1
+                    continue
                 
-                # Buscar estados
+                estado_lower = linea.lower()
                 if "apta para el" in estado_lower or "precauci" in estado_lower or "prohibido" in estado_lower or "sin bandera" in estado_lower:
-                    if i > 0:
-                        nombre_playa = limpiar_texto(lineas[i-1])
-                        
-                        # Creamos una clave única uniendo Municipio + Playa
-                        clave_diccionario = f"{current_municipio}_{nombre_playa}" if current_municipio else nombre_playa
-                        
-                        if "apta" in estado_lower:
-                            banderas[clave_diccionario] = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
-                        elif "precauci" in estado_lower:
-                            banderas[clave_diccionario] = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
-                        elif "prohibido" in estado_lower or "roja" in estado_lower:
-                            banderas[clave_diccionario] = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
-                        elif "sin bandera" in estado_lower:
-                            banderas[clave_diccionario] = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                    for j in range(max(0, i-3), i):
+                        candidata = lineas[j]
+                        candidata_clean = limpiar_texto(candidata)
+                        if len(candidata_clean) > 2 and not "/" in candidata and not ":" in candidata:
+                            clave_diccionario = f"{current_municipio}_{candidata_clean}" if current_municipio else candidata_clean
+                            
+                            if "apta" in estado_lower:
+                                banderas[clave_diccionario] = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
+                            elif "precauci" in estado_lower:
+                                banderas[clave_diccionario] = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
+                            elif "prohibido" in estado_lower or "roja" in estado_lower:
+                                banderas[clave_diccionario] = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
+                            elif "sin bandera" in estado_lower:
+                                banderas[clave_diccionario] = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                            break
+                i += 1
+                
             browser.close()
     except Exception as e:
         print(f"[SCRAPING 112] Ocurrió un error: {e}")
@@ -268,10 +273,7 @@ def api_playas():
         nombre_clean = limpiar_texto(playa["nombre"])
         municipio_clean = limpiar_texto(playa["municipio"])
         
-        # Buscamos usando Municipio + Nombre para no mezclar playas que se llamen igual en distintos pueblos
         clave_busqueda = f"{municipio_clean}_{nombre_clean}"
-        
-        # Si no la encuentra por la clave compuesta, intenta buscarla solo por el nombre, y si no, da la bandera por defecto
         bandera = banderas_112.get(clave_busqueda, banderas_112.get(nombre_clean, BANDERA_DEFECTO))
         
         clima = obtener_clima_por_municipio(playa["municipio"], playa["lat"], playa["lng"])
