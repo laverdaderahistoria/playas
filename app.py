@@ -7,7 +7,6 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Configuración de sesión HTTP imitando al navegador para la API del 112
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -80,7 +79,6 @@ def traducir_codigo_tiempo(codigo):
 
 CACHE_CLIMA = {}
 
-# Caché de emergencia precargada para que Render responda al instante si el 112 bloquea la IP
 CACHE_PLAYAS_EMERGENCIA = [
     {
         "nombre": "LA COLONIA", "municipio": "ÁGUILAS", "lat": 37.4032, "lng": -1.5831,
@@ -197,19 +195,11 @@ def api_playas():
         if not playas_procesadas:
             playas_procesadas = CACHE_PLAYAS_EMERGENCIA
 
-        return jsonify({
-            "status": "ok",
-            "ultima_actualizacion": datetime.now().strftime("%H:%M:%S"),
-            "playas": playas_procesadas
-        })
+        return jsonify(playas_procesadas)
 
     except Exception as e:
         print(f"[ERROR EN RENDER/112]: {e}")
-        return jsonify({
-            "status": "ok_fallback",
-            "mensaje": "Sirviendo datos de respaldo por restricción de red",
-            "playas": CACHE_PLAYAS_EMERGENCIA
-        })
+        return jsonify(CACHE_PLAYAS_EMERGENCIA)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
