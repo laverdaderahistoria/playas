@@ -7,6 +7,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+# Configuración de sesión HTTP imitando al navegador para la API del 112
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -79,7 +80,7 @@ def traducir_codigo_tiempo(codigo):
 
 CACHE_CLIMA = {}
 
-# Caché de emergencia precargada con datos por defecto para que Render NUNCA devuelva error 500
+# Caché de emergencia precargada para que Render responda al instante si el 112 bloquea la IP
 CACHE_PLAYAS_EMERGENCIA = [
     {
         "nombre": "LA COLONIA", "municipio": "ÁGUILAS", "lat": 37.4032, "lng": -1.5831,
@@ -211,4 +212,5 @@ def api_playas():
         })
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
