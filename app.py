@@ -173,31 +173,32 @@ def obtener_estados_banderas_112():
         
         if response.status_code == 200:
             data = response.json()
-            if isinstance(data, list):
-                for item in data:
-                    nombre_playa = item.get("nombre") or item.get("name") or item.get("beachName")
-                    estado_info = item.get("estado") or item.get("state") or item.get("flag") or item.get("color")
+            items = data if isinstance(data, list) else data.get("content", data.get("data", []))
+            
+            for item in items:
+                nombre_playa = item.get("nombre") or item.get("name") or item.get("beachName") or item.get("playa")
+                estado_info = item.get("estado") or item.get("state") or item.get("flag") or item.get("color") or item.get("estadoId")
+                
+                if nombre_playa:
+                    n_clean = limpiar_texto(nombre_playa)
+                    e_str = str(estado_info).lower()
                     
-                    if nombre_playa:
-                        n_clean = limpiar_texto(nombre_playa)
-                        e_str = str(estado_info).lower()
+                    if any(v in e_str for v in ["1", "verde", "apta", "green", "normal"]):
+                        info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
+                    elif any(v in e_str for v in ["2", "amarilla", "precaucion", "yellow"]):
+                        info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
+                    elif any(v in e_str for v in ["3", "roja", "prohibido", "red", "peligro"]):
+                        info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
+                    else:
+                        info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
                         
-                        if any(v in e_str for v in ["1", "verde", "apta", "green"]):
-                            info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
-                        elif any(v in e_str for v in ["2", "amarilla", "precaucion", "yellow"]):
-                            info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
-                        elif any(v in e_str for v in ["3", "roja", "prohibido", "red"]):
-                            info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
-                        else:
-                            info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
-                            
-                        banderas[n_clean] = info
-                print(f"[ÉXITO] Se han obtenido {len(banderas)} estados de playas desde la API oficial.")
+                    banderas[n_clean] = info
+            print(f"[ÉXITO] Se procesaron {len(banderas)} estados desde la API del 112.")
         else:
-            print(f"[!] Error en la API del 112. Código HTTP: {response.status_code}")
+            print(f"[!] Error API 112. Código HTTP: {response.status_code}")
             
     except Exception as e:
-        print(f"[!] Error al consultar la API del 112: {e}")
+        print(f"[!] Excepción al consultar API del 112: {e}")
         
     return banderas
 
@@ -228,10 +229,21 @@ def api_playas():
             nombre_clean = limpiar_texto(playa["nombre"])
             
             bandera = BANDERA_DEFECTO
+            
+            # 1. Búsqueda por coincidencia directa o subcadena
             for k, v in banderas_112.items():
-                if nombre_clean in k or k in nombre_clean:
+                if nombre_clean == k or nombre_clean in k or k in nombre_clean:
                     bandera = v
                     break
+            
+            # 2. Búsqueda avanzada por palabras clave compartidas si no hubo match exacto
+            if bandera["color"] == "Azul":
+                palabras_playa = set(nombre_clean.split())
+                for k, v in banderas_112.items():
+                    palabras_k = set(k.split())
+                    if palabras_playa & palabras_k:
+                        bandera = v
+                        break
             
             clima = obtener_clima_por_municipio(playa["municipio"], playa["lat"], playa["lng"])
             
@@ -261,7 +273,6 @@ def api_playas():
     except Exception as e:
         print(f"[ERROR CRITICO EN /api/playas]: {e}")
         traceback.print_exc()
-        # Devolvemos un JSON estructurado con el error en lugar de colgar el servidor con un 500 HTML
         return jsonify({
             "status": "error",
             "mensaje": str(e),
