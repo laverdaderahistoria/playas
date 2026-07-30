@@ -17,12 +17,13 @@ CACHE_EXPIRATION_SECS = 1800  # 30 minutos
 def limpiar_texto(texto):
     if not texto:
         return ""
+    # Quitar lo que esté entre paréntesis (ej: "(Mazarrón)" o "(Camping)")
     texto = re.sub(r'\(.*?\)', '', texto)
     texto = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
     texto = re.sub(r'[^a-zA-Z0-9\s]', '', texto).lower().strip()
     return texto
 
-# Base de datos completa de playas de la Región de Murcia
+# Base de datos completa de playas actualizada con nombres exactos del 112 y nuevas playas
 PLAYAS_BASE = [
     # San Pedro del Pinatar
     {"nombre": "El Mojón", "municipio": "San Pedro del Pinatar", "lat": 37.8420, "lng": -0.7720},
@@ -75,17 +76,18 @@ PLAYAS_BASE = [
     {"nombre": "Cala Reona", "municipio": "Cartagena", "lat": 37.6250, "lng": -0.7080},
     {"nombre": "Portmán", "municipio": "Cartagena", "lat": 37.5850, "lng": -0.8520},
 
-    # Mazarrón
+    # Mazarrón (Nombres corregidos al milímetro para hacer match con el 112)
     {"nombre": "El Mojón (Mazarrón)", "municipio": "Mazarrón", "lat": 37.5752, "lng": -1.2335},
+    {"nombre": "El Alamillo", "municipio": "Mazarrón", "lat": 37.5710, "lng": -1.2430},
+    {"nombre": "Rihuete", "municipio": "Mazarrón", "lat": 37.5678, "lng": -1.2515},
+    {"nombre": "El Puerto", "municipio": "Mazarrón", "lat": 37.5638, "lng": -1.2580},  # Antes era "Puerto"
+    {"nombre": "Bahía", "municipio": "Mazarrón", "lat": 37.5622, "lng": -1.2642},
+    {"nombre": "La Isla", "municipio": "Mazarrón", "lat": 37.5608, "lng": -1.2690},
+    {"nombre": "Nares", "municipio": "Mazarrón", "lat": 37.5588, "lng": -1.2745},
+    {"nombre": "Castellar", "municipio": "Mazarrón", "lat": 37.5580, "lng": -1.2825},
+    {"nombre": "Moreras", "municipio": "Mazarrón", "lat": 37.5585, "lng": -1.2980},    # Añadida Moreras
     {"nombre": "La Reya", "municipio": "Mazarrón", "lat": 37.5595, "lng": -1.2910},
     {"nombre": "Bolnuevo", "municipio": "Mazarrón", "lat": 37.5618, "lng": -1.3025},
-    {"nombre": "Castellar", "municipio": "Mazarrón", "lat": 37.5580, "lng": -1.2825},
-    {"nombre": "Nares", "municipio": "Mazarrón", "lat": 37.5588, "lng": -1.2745},
-    {"nombre": "La Isla", "municipio": "Mazarrón", "lat": 37.5608, "lng": -1.2690},
-    {"nombre": "Bahía", "municipio": "Mazarrón", "lat": 37.5622, "lng": -1.2642},
-    {"nombre": "Puerto", "municipio": "Mazarrón", "lat": 37.5638, "lng": -1.2580},
-    {"nombre": "Rihuete", "municipio": "Mazarrón", "lat": 37.5678, "lng": -1.2515},
-    {"nombre": "El Alamillo", "municipio": "Mazarrón", "lat": 37.5710, "lng": -1.2430},
     {"nombre": "Percheles", "municipio": "Mazarrón", "lat": 37.5255, "lng": -1.3535},
 
     # Águilas
@@ -161,51 +163,38 @@ def obtener_clima_por_municipio(municipio, lat, lng):
     return clima
 
 def obtener_estados_banderas_112():
-    """
-    Extrae de forma dinámica las banderas renderizadas por JS en la web del 112.
-    """
-    banderas = {
-        # Fallbacks actualizados por si falla la llamada dinámicamente
-        "el mojon": {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"},
-        "la reya": {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"},
-        "bolnuevo": {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
-    }
-    
+    banderas = {}
     url_112 = "http://112rm.carm.es/"
     
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(url_112, timeout=12000, wait_until="domcontentloaded")
+            page.goto(url_112, timeout=15000, wait_until="domcontentloaded")
             
-            # Buscar contenedores de texto de tarjetas
-            elementos = page.locator('div').all()
-            for elem in elementos:
-                try:
-                    txt = elem.inner_text().strip()
-                    if not txt:
-                        continue
-                    
-                    lineas = [l.strip() for l in txt.split('\n') if l.strip()]
-                    
-                    if len(lineas) >= 2:
-                        posible_nombre = limpiar_texto(lineas[0])
-                        posible_estado = lineas[1].lower()
+            # NUEVO MÉTODO ROBUSTO: Extraemos el texto completo de la web y lo separamos por líneas
+            # De esta forma ignoramos la estructura HTML caótica de la web oficial
+            texto_pagina = page.inner_text('body')
+            lineas = [l.strip() for l in texto_pagina.split('\n') if l.strip()]
+            
+            for i, linea in enumerate(lineas):
+                estado_lower = linea.lower()
+                
+                # Si la línea actual indica el estado de una bandera...
+                if "apta para el" in estado_lower or "precauci" in estado_lower or "prohibido" in estado_lower:
+                    if i > 0:
+                        # ...el nombre de la playa siempre está en la línea de texto anterior
+                        nombre_playa = limpiar_texto(lineas[i-1])
                         
-                        if "apta para el baño" in posible_estado or "apta para el bano" in posible_estado:
-                            banderas[posible_nombre] = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
-                        elif "precaución" in posible_estado or "precaucion" in posible_estado:
-                            banderas[posible_nombre] = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
-                        elif "prohibido" in posible_estado or "roja" in posible_estado:
-                            banderas[posible_nombre] = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
-                        elif "sin bandera" in posible_estado:
-                            banderas[posible_nombre] = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
-                except Exception:
-                    continue
+                        if "apta" in estado_lower:
+                            banderas[nombre_playa] = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
+                        elif "precauci" in estado_lower:
+                            banderas[nombre_playa] = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
+                        elif "prohibido" in estado_lower or "roja" in estado_lower:
+                            banderas[nombre_playa] = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
             browser.close()
     except Exception as e:
-        print(f"[SCRAPING 112 CON PLAYWRIGHT - Usando estado base]: {e}")
+        print(f"[SCRAPING 112] Ocurrió un error: {e}")
         
     return banderas
 
@@ -215,7 +204,6 @@ def api_playas():
     ahora = datetime.now()
     
     if CACHE_PLAYAS_DATA["data"] and CACHE_PLAYAS_DATA["timestamp"] and (ahora - CACHE_PLAYAS_DATA["timestamp"]).seconds < CACHE_EXPIRATION_SECS:
-        print("[API] Sirviendo playas desde la caché.")
         return jsonify({
             "status": "ok",
             "ultima_actualizacion": CACHE_PLAYAS_DATA["timestamp"].strftime("%H:%M:%S"),
@@ -226,7 +214,6 @@ def api_playas():
     banderas_112 = obtener_estados_banderas_112()
     playas_procesadas = []
 
-    # Estado por defecto cuando NO hay bandera en la web oficial
     BANDERA_DEFECTO = {
         "color": "Azul",
         "texto": "Sin Bandera",
@@ -236,7 +223,7 @@ def api_playas():
     for playa in PLAYAS_BASE:
         nombre_clean = limpiar_texto(playa["nombre"])
         
-        # Buscar coincidencia en el resultado extraído
+        # Asignar bandera encontrada o usar el color azul por defecto
         bandera = banderas_112.get(nombre_clean, BANDERA_DEFECTO)
         
         clima = obtener_clima_por_municipio(playa["municipio"], playa["lat"], playa["lng"])
@@ -259,7 +246,6 @@ def api_playas():
     CACHE_PLAYAS_DATA["data"] = playas_procesadas
     CACHE_PLAYAS_DATA["timestamp"] = ahora
 
-    print(f"[API] Enviando {len(playas_procesadas)} playas procesadas.")
     return jsonify({
         "status": "ok",
         "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
