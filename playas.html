@@ -70,7 +70,7 @@
             z-index: 1;
         }
 
-        /* Panel Lateral de Búsqueda Reducido para PWA */
+        /* Panel Lateral Compacto */
         #search-panel {
             width: 220px;
             background: #ffffff;
@@ -148,7 +148,7 @@
             flex-shrink: 0;
         }
 
-        /* Estilo del Pin con Nombre Debajo */
+        /* Pin con Etiqueta */
         .custom-pin-container {
             display: flex;
             flex-direction: column;
@@ -173,7 +173,7 @@
             text-align: center;
         }
 
-        /* Popup Compacto */
+        /* Popups del Mapa */
         .leaflet-popup-content-wrapper {
             padding: 0;
             border-radius: 8px;
@@ -222,7 +222,6 @@
             width: 100%;
         }
 
-        /* Adaptación Compacta a Móviles */
         @media (max-width: 768px) {
             #toggle-search {
                 display: block;
@@ -258,7 +257,6 @@
     <div id="content">
         <div id="map"></div>
 
-        <!-- Buscador Lateral (Derecha) -->
         <div id="search-panel">
             <div class="search-box">
                 <input type="text" id="search-input" placeholder="Buscar playa..." oninput="filtrarPlayas()">

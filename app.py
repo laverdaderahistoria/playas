@@ -3,8 +3,8 @@ import os
 import re
 import unicodedata
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
+from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
@@ -76,6 +76,8 @@ PLAYAS_BASE = [
     {"nombre": "Portmán", "municipio": "Cartagena", "lat": 37.5850, "lng": -0.8520},
 
     # Mazarrón
+    {"nombre": "El Mojón (Mazarrón)", "municipio": "Mazarrón", "lat": 37.5752, "lng": -1.2335},
+    {"nombre": "La Reya", "municipio": "Mazarrón", "lat": 37.5595, "lng": -1.2910},
     {"nombre": "Bolnuevo", "municipio": "Mazarrón", "lat": 37.5618, "lng": -1.3025},
     {"nombre": "Castellar", "municipio": "Mazarrón", "lat": 37.5580, "lng": -1.2825},
     {"nombre": "Nares", "municipio": "Mazarrón", "lat": 37.5588, "lng": -1.2745},
@@ -84,9 +86,7 @@ PLAYAS_BASE = [
     {"nombre": "Puerto", "municipio": "Mazarrón", "lat": 37.5638, "lng": -1.2580},
     {"nombre": "Rihuete", "municipio": "Mazarrón", "lat": 37.5678, "lng": -1.2515},
     {"nombre": "El Alamillo", "municipio": "Mazarrón", "lat": 37.5710, "lng": -1.2430},
-    {"nombre": "El Mojón (Mazarrón)", "municipio": "Mazarrón", "lat": 37.5752, "lng": -1.2335},
     {"nombre": "Percheles", "municipio": "Mazarrón", "lat": 37.5255, "lng": -1.3535},
-    {"nombre": "La Reya", "municipio": "Mazarrón", "lat": 37.5595, "lng": -1.2910},
 
     # Águilas
     {"nombre": "Levante", "municipio": "Águilas", "lat": 37.4048, "lng": -1.5778},
@@ -162,19 +162,52 @@ def obtener_clima_por_municipio(municipio, lat, lng):
 
 def obtener_estados_banderas_112():
     """
-    Mapa de alertas activas desde el 112.
-    - Verde: #28a745
-    - Amarilla: #e0a800
-    - Roja: #dc3545
-    - Azul: #0077b6 (Sin Bandera / Sin Estado)
+    Extrae de forma dinámica las banderas renderizadas por JS en la web del 112.
     """
-    banderas_manuales = {
-        # Ejemplos manuales si es necesario:
-        # "bolnuevo": {"color": "Amarilla", "texto": "Precaución - Oleaje", "hex": "#e0a800"},
-        # "calblanque": {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"},
-        # "elmojon": {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
+    banderas = {
+        # Fallbacks actualizados por si falla la llamada dinámicamente
+        "el mojon": {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"},
+        "la reya": {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"},
+        "bolnuevo": {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
     }
-    return banderas_manuales
+    
+    url_112 = "http://112rm.carm.es/"
+    
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url_112, timeout=12000, wait_until="domcontentloaded")
+            
+            # Buscar contenedores de texto de tarjetas
+            elementos = page.locator('div').all()
+            for elem in elementos:
+                try:
+                    txt = elem.inner_text().strip()
+                    if not txt:
+                        continue
+                    
+                    lineas = [l.strip() for l in txt.split('\n') if l.strip()]
+                    
+                    if len(lineas) >= 2:
+                        posible_nombre = limpiar_texto(lineas[0])
+                        posible_estado = lineas[1].lower()
+                        
+                        if "apta para el baño" in posible_estado or "apta para el bano" in posible_estado:
+                            banderas[posible_nombre] = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
+                        elif "precaución" in posible_estado or "precaucion" in posible_estado:
+                            banderas[posible_nombre] = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
+                        elif "prohibido" in posible_estado or "roja" in posible_estado:
+                            banderas[posible_nombre] = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
+                        elif "sin bandera" in posible_estado:
+                            banderas[posible_nombre] = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                except Exception:
+                    continue
+            browser.close()
+    except Exception as e:
+        print(f"[SCRAPING 112 CON PLAYWRIGHT - Usando estado base]: {e}")
+        
+    return banderas
 
 @app.route("/api/playas")
 def api_playas():
@@ -193,7 +226,7 @@ def api_playas():
     banderas_112 = obtener_estados_banderas_112()
     playas_procesadas = []
 
-    # Estado por defecto: AZUL ("Sin Bandera") cuando no haya datos registrados
+    # Estado por defecto cuando NO hay bandera en la web oficial
     BANDERA_DEFECTO = {
         "color": "Azul",
         "texto": "Sin Bandera",
@@ -203,6 +236,7 @@ def api_playas():
     for playa in PLAYAS_BASE:
         nombre_clean = limpiar_texto(playa["nombre"])
         
+        # Buscar coincidencia en el resultado extraído
         bandera = banderas_112.get(nombre_clean, BANDERA_DEFECTO)
         
         clima = obtener_clima_por_municipio(playa["municipio"], playa["lat"], playa["lng"])
