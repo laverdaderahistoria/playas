@@ -12,7 +12,7 @@ CACHE_PLAYAS_DATA = {
     "timestamp": None,
     "data": []
 }
-CACHE_EXPIRATION_SECS = 1800  # 30 minutos
+CACHE_EXPIRATION_SECS = 0  # Desactivada temporalmente para depurar al instante
 
 def limpiar_texto(texto):
     if not texto:
@@ -22,7 +22,6 @@ def limpiar_texto(texto):
     texto = re.sub(r'\s+', ' ', texto).strip()
     return texto
 
-# Base de datos completa con las coordenadas y nombres exactos
 PLAYAS_BASE = [
     # --- ÁGUILAS ---
     {"nombre": "CALABARDINA", "municipio": "AGUILAS", "lat": 37.4317, "lng": -1.5019},
@@ -109,6 +108,24 @@ PLAYAS_BASE = [
 def index():
     return send_from_directory(os.getcwd(), "playas.html")
 
+# NUEVA RUTA DE INSPECCIÓN: Abre http://localhost:8000/api/debug-112 en Chrome para ver qué responde el servidor del 112
+@app.route("/api/debug-112")
+def debug_112():
+    url_api = "https://web-app.112rmurcia.com/copla-service/copla/state/all"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://noticias.112rmurcia.es/"
+    }
+    try:
+        res = requests.get(url_api, headers=headers, timeout=10)
+        return jsonify({
+            "http_status": res.status_code,
+            "raw_data_preview": res.json() if res.status_code == 200 else res.text
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 def traducir_codigo_tiempo(codigo):
     traducciones = {
         0: "Despejado", 1: "Principalmente despejado", 2: "Parcialmente nuboso",
@@ -168,34 +185,49 @@ def obtener_estados_banderas_112():
     }
     
     try:
-        print(f"[*] Consultando API oficial del 112: {url_api}")
         response = requests.get(url_api, headers=headers, timeout=10)
+        print(f"[*] Código HTTP API 112: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            items = data if isinstance(data, list) else data.get("content", data.get("data", []))
+            # Si es un diccionario con claves anidadas, lo adaptamos
+            items = data if isinstance(data, list) else data.get("content", data.get("data", data.get("result", [])))
             
-            for item in items:
-                nombre_playa = item.get("nombre") or item.get("name") or item.get("beachName") or item.get("playa")
-                estado_info = item.get("estado") or item.get("state") or item.get("flag") or item.get("color") or item.get("estadoId")
-                
-                if nombre_playa:
-                    n_clean = limpiar_texto(nombre_playa)
-                    e_str = str(estado_info).lower()
+            print(f"[*] Elementos totales devueltos por el 112: {len(items) if isinstance(items, list) else 'No es lista'}")
+            
+            if isinstance(items, list):
+                for item in items:
+                    # Buscamos cualquier campo que pueda contener el nombre o estado
+                    nombre_playa = None
+                    for k in ["nombre", "name", "beachName", "playa", "denominacion"]:
+                        if k in item and item[k]:
+                            nombre_playa = item[k]
+                            break
+                            
+                    estado_info = None
+                    for k in ["estado", "state", "flag", "color", "estadoId", "bandera", "situacion"]:
+                        if k in item and item[k] is not None:
+                            estado_info = item[k]
+                            break
                     
-                    if any(v in e_str for v in ["1", "verde", "apta", "green", "normal"]):
-                        info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
-                    elif any(v in e_str for v in ["2", "amarilla", "precaucion", "yellow"]):
-                        info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
-                    elif any(v in e_str for v in ["3", "roja", "prohibido", "red", "peligro"]):
-                        info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
-                    else:
-                        info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                    if nombre_playa:
+                        n_clean = limpiar_texto(nombre_playa)
+                        e_str = str(estado_info).lower()
                         
-                    banderas[n_clean] = info
-            print(f"[ÉXITO] Se procesaron {len(banderas)} estados desde la API del 112.")
+                        print(f"    -> Detectada playa API 112: '{nombre_playa}' (Limpia: '{n_clean}') | Estado bruto: '{estado_info}'")
+                        
+                        if any(v in e_str for v in ["1", "verde", "apta", "green", "normal", "true"]):
+                            info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
+                        elif any(v in e_str for v in ["2", "amarilla", "precaucion", "yellow"]):
+                            info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
+                        elif any(v in e_str for v in ["3", "roja", "prohibido", "red", "peligro"]):
+                            info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
+                        else:
+                            info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                            
+                        banderas[n_clean] = info
         else:
-            print(f"[!] Error API 112. Código HTTP: {response.status_code}")
+            print(f"[!] Error API 112: {response.status_code}")
             
     except Exception as e:
         print(f"[!] Excepción al consultar API del 112: {e}")
@@ -204,17 +236,7 @@ def obtener_estados_banderas_112():
 
 @app.route("/api/playas")
 def api_playas():
-    global CACHE_PLAYAS_DATA
     try:
-        ahora = datetime.now()
-        
-        if CACHE_PLAYAS_DATA["data"] and CACHE_PLAYAS_DATA["timestamp"] and (ahora - CACHE_PLAYAS_DATA["timestamp"]).seconds < CACHE_EXPIRATION_SECS:
-            return jsonify({
-                "status": "ok",
-                "ultima_actualizacion": CACHE_PLAYAS_DATA["timestamp"].strftime("%H:%M:%S"),
-                "playas": CACHE_PLAYAS_DATA["data"]
-            })
-
         CACHE_CLIMA.clear()
         banderas_112 = obtener_estados_banderas_112()
         playas_procesadas = []
@@ -227,16 +249,15 @@ def api_playas():
 
         for playa in PLAYAS_BASE:
             nombre_clean = limpiar_texto(playa["nombre"])
-            
             bandera = BANDERA_DEFECTO
             
-            # 1. Búsqueda por coincidencia directa o subcadena
+            # Coincidencia exacta o parcial
             for k, v in banderas_112.items():
                 if nombre_clean == k or nombre_clean in k or k in nombre_clean:
                     bandera = v
                     break
             
-            # 2. Búsqueda avanzada por palabras clave compartidas si no hubo match exacto
+            # Coincidencia por palabra clave suelta
             if bandera["color"] == "Azul":
                 palabras_playa = set(nombre_clean.split())
                 for k, v in banderas_112.items():
@@ -262,12 +283,9 @@ def api_playas():
                 "bandera": bandera
             })
 
-        CACHE_PLAYAS_DATA["data"] = playas_procesadas
-        CACHE_PLAYAS_DATA["timestamp"] = ahora
-
         return jsonify({
             "status": "ok",
-            "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
+            "ultima_actualizacion": datetime.now().strftime("%H:%M:%S"),
             "playas": playas_procesadas
         })
     except Exception as e:
