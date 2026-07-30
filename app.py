@@ -162,13 +162,17 @@ def obtener_clima_por_municipio(municipio, lat, lng):
 
 def obtener_estados_banderas_112():
     """
-    Nota técnica: La web del 112 carga sus datos mediante mapas interactivos JS.
-    Este diccionario permite definir de forma rápida las alertas activas en la Región
-    cuando se requiera reflejar avisos amarillos o rojos institucionales reales.
+    Mapa de alertas activas desde el 112.
+    - Verde: #28a745
+    - Amarilla: #e0a800
+    - Roja: #dc3545
+    - Azul: #0077b6 (Sin Bandera / Sin Estado)
     """
     banderas_manuales = {
+        # Ejemplos manuales si es necesario:
         # "bolnuevo": {"color": "Amarilla", "texto": "Precaución - Oleaje", "hex": "#e0a800"},
-        # "calblanque": {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
+        # "calblanque": {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"},
+        # "elmojon": {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
     }
     return banderas_manuales
 
@@ -189,14 +193,17 @@ def api_playas():
     banderas_112 = obtener_estados_banderas_112()
     playas_procesadas = []
 
+    # Estado por defecto: AZUL ("Sin Bandera") cuando no haya datos registrados
+    BANDERA_DEFECTO = {
+        "color": "Azul",
+        "texto": "Sin Bandera",
+        "hex": "#0077b6"
+    }
+
     for playa in PLAYAS_BASE:
         nombre_clean = limpiar_texto(playa["nombre"])
         
-        bandera = banderas_112.get(nombre_clean, {
-            "color": "Verde",
-            "texto": "Apto para el baño",
-            "hex": "#28a745"
-        })
+        bandera = banderas_112.get(nombre_clean, BANDERA_DEFECTO)
         
         clima = obtener_clima_por_municipio(playa["municipio"], playa["lat"], playa["lng"])
         
