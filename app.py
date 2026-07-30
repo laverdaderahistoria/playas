@@ -4,7 +4,6 @@ import re
 import unicodedata
 import requests
 from datetime import datetime
-from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
@@ -159,62 +158,44 @@ def obtener_clima_por_municipio(municipio, lat, lng):
 
 def obtener_estados_banderas_112():
     banderas = {}
-    url_112 = "https://noticias.112rmurcia.es/playas/"
+    url_api = "https://web-app.112rmurcia.com/copla-service/copla/state/all"[cite: 1]
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://noticias.112rmurcia.es/"
+    }
     
     try:
-        with sync_playwright() as p:
-            # Ejecutamos headless=True pero con argumentos de estabilidad
-            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
-            page = browser.new_page()
-            
-            print(f"[*] Accediendo a {url_112}...")
-            page.goto(url_112, timeout=60000, wait_until="domcontentloaded")
-            
-            # Esperar a que carguen los elementos de la lista lateral del mapa o tarjetas
-            page.wait_for_timeout(5000)
-            
-            # Extraer mediante script evaluado en el navegador todos los elementos de texto y clases de estado
-            elementos_extraidos = page.evaluate("""() => {
-                const resultados = [];
-                // Buscamos filas, elementos de lista o tarjetas que contengan nombres de playas y estados
-                const items = document.querySelectorAll('li, .elementor-widget-container, .card, tr, .leaflet-marker-icon');
-                items.forEach(el => {
-                    const texto = el.innerText || '';
-                    if (texto.trim().length > 0) {
-                        resultados.push(texto);
-                    }
-                });
-                return resultados;
-            });""")
-            
-            for texto_bloque in elementos_extraidos:
-                lineas = [l.strip() for l in texto_bloque.split('\n') if l.strip()]
-                nombre_playa = ""
-                estado_texto = ""
+        print(f"[*] Consultando API oficial del 112: {url_api}")
+        response = requests.get(url_api, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            for item in data:
+                nombre_playa = item.get("nombre") or item.get("name") or item.get("beachName")
+                estado_info = item.get("estado") or item.get("state") or item.get("flag") or item.get("color")
                 
-                for l in lineas:
-                    l_lower = l.lower()
-                    if any(st in l_lower for st in ["apta", "precauci", "prohibido", "verde", "amarilla", "roja"]):
-                        estado_texto = l_lower
-                    elif not nombre_playa and len(l) > 3 and "playas" not in l_lower and "murcia" not in l_lower and "buscar" not in l_lower:
-                        nombre_playa = l
-                        
-                if nombre_playa and estado_texto:
+                if nombre_playa:
                     n_clean = limpiar_texto(nombre_playa)
-                    if "apta" in estado_texto or "verde" in estado_texto:
+                    e_str = str(estado_info).lower()
+                    
+                    if any(v in e_str for v in ["1", "verde", "apta", "green"]):
                         info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
-                    elif "precauci" in estado_texto or "amarilla" in estado_texto:
+                    elif any(v in e_str for v in ["2", "amarilla", "precaucion", "yellow"]):
                         info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
-                    elif "prohibido" in estado_texto or "roja" in estado_texto:
+                    elif any(v in e_str for v in ["3", "roja", "prohibido", "red"]):
                         info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
                     else:
                         info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
                         
                     banderas[n_clean] = info
-                    
-            browser.close()
+            print(f"[ÉXITO] Se han obtenido {len(banderas)} estados de playas desde la API oficial.")
+        else:
+            print(f"[!] Error en la API del 112. Código HTTP: {response.status_code}")
+            
     except Exception as e:
-        print(f"[SCRAPING 112] Error al obtener datos de la web: {e}")
+        print(f"[!] Error al consultar la API del 112: {e}")
         
     return banderas
 
@@ -242,9 +223,7 @@ def api_playas():
 
     for playa in PLAYAS_BASE:
         nombre_clean = limpiar_texto(playa["nombre"])
-        municipio_clean = limpiar_texto(playa["municipio"])
         
-        # Coincidencia flexible por nombre de playa
         bandera = BANDERA_DEFECTO
         for k, v in banderas_112.items():
             if nombre_clean in k or k in nombre_clean:
