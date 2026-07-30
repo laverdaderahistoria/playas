@@ -17,11 +17,8 @@ CACHE_EXPIRATION_SECS = 1800  # 30 minutos
 def limpiar_texto(texto):
     if not texto:
         return ""
-    # Quitamos tildes
     texto = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
-    # Cambiamos cualquier carácter que no sea letra o número (como paréntesis o guiones) por espacios
     texto = re.sub(r'[^a-zA-Z0-9]', ' ', texto).lower()
-    # Colapsamos múltiples espacios seguidos en uno solo
     texto = re.sub(r'\s+', ' ', texto).strip()
     return texto
 
@@ -224,20 +221,29 @@ def obtener_estados_banderas_112():
                 
                 estado_lower = linea.lower()
                 if "apta para el" in estado_lower or "precauci" in estado_lower or "prohibido" in estado_lower or "sin bandera" in estado_lower:
-                    for j in range(max(0, i-3), i):
+                    # Buscamos hacia atrás empezando estrictamente desde la línea anterior (i-1)
+                    for j in range(i-1, max(-1, i-4), -1):
                         candidata = lineas[j]
                         candidata_clean = limpiar_texto(candidata)
-                        if len(candidata_clean) > 2 and not "/" in candidata and not ":" in candidata:
-                            clave_diccionario = f"{current_municipio}_{candidata_clean}" if current_municipio else candidata_clean
+                        if (len(candidata_clean) > 2 
+                            and "/" not in candidata 
+                            and ":" not in candidata 
+                            and "aforo" not in candidata_clean 
+                            and "estado" not in candidata_clean):
+                            
+                            clave_compuesta = f"{current_municipio}_{candidata_clean}" if current_municipio else candidata_clean
                             
                             if "apta" in estado_lower:
-                                banderas[clave_diccionario] = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
+                                info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
                             elif "precauci" in estado_lower:
-                                banderas[clave_diccionario] = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
+                                info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
                             elif "prohibido" in estado_lower or "roja" in estado_lower:
-                                banderas[clave_diccionario] = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
-                            elif "sin bandera" in estado_lower:
-                                banderas[clave_diccionario] = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                                info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
+                            else:
+                                info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                                
+                            banderas[clave_compuesta] = info
+                            banderas[candidata_clean] = info
                             break
                 i += 1
                 
