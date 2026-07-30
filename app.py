@@ -196,9 +196,20 @@ def obtener_estados_banderas_112():
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(url_112, timeout=20000, wait_until="domcontentloaded")
+            # Esperamos a que la red esté inactiva para asegurar que se cargó la SPA y sus datos AJAX
+            page.goto(url_112, timeout=30000, wait_until="networkidle")
             
-            page.wait_for_selector("body", timeout=5000)
+            # Esperar obligatoriamente a que aparezca contenido dinámico con estados de bandera en la página
+            try:
+                page.wait_for_selector("text=Apta para el baño", timeout=10000)
+            except:
+                try:
+                    page.wait_for_selector("text=Precaución", timeout=5000)
+                except:
+                    page.wait_for_timeout(5000)
+            
+            texto_completo = page.inner_text('body')
+            lineas = [l.strip() for l in texto_completo.split('\n') if l.strip()]
             
             current_municipio = ""
             municipios_validos = [
@@ -206,9 +217,6 @@ def obtener_estados_banderas_112():
                 "los alcazares", "mazarron", "san javier", "san pedro del pinatar"
             ]
 
-            texto_completo = page.inner_text('body')
-            lineas = [l.strip() for l in texto_completo.split('\n') if l.strip()]
-            
             i = 0
             while i < len(lineas):
                 linea = lineas[i]
@@ -221,15 +229,15 @@ def obtener_estados_banderas_112():
                 
                 estado_lower = linea.lower()
                 if "apta para el" in estado_lower or "precauci" in estado_lower or "prohibido" in estado_lower or "sin bandera" in estado_lower:
-                    # Buscamos hacia atrás empezando estrictamente desde la línea anterior (i-1)
-                    for j in range(i-1, max(-1, i-4), -1):
+                    for j in range(i-1, max(-1, i-5), -1):
                         candidata = lineas[j]
                         candidata_clean = limpiar_texto(candidata)
                         if (len(candidata_clean) > 2 
                             and "/" not in candidata 
                             and ":" not in candidata 
                             and "aforo" not in candidata_clean 
-                            and "estado" not in candidata_clean):
+                            and "estado" not in candidata_clean 
+                            and "mar" not in candidata_clean):
                             
                             clave_compuesta = f"{current_municipio}_{candidata_clean}" if current_municipio else candidata_clean
                             
