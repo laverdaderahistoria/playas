@@ -196,65 +196,67 @@ def obtener_estados_banderas_112():
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            # Esperamos a que la red esté inactiva para asegurar que se cargó la SPA y sus datos AJAX
             page.goto(url_112, timeout=30000, wait_until="networkidle")
+            page.wait_for_timeout(3000)
             
-            # Esperar obligatoriamente a que aparezca contenido dinámico con estados de bandera en la página
-            try:
-                page.wait_for_selector("text=Apta para el baño", timeout=10000)
-            except:
+            def extraer_tarjetas_actuales():
                 try:
-                    page.wait_for_selector("text=Precaución", timeout=5000)
-                except:
-                    page.wait_for_timeout(5000)
-            
-            texto_completo = page.inner_text('body')
-            lineas = [l.strip() for l in texto_completo.split('\n') if l.strip()]
-            
-            current_municipio = ""
-            municipios_validos = [
-                "aguilas", "cartagena", "la union", "lorca", 
-                "los alcazares", "mazarron", "san javier", "san pedro del pinatar"
-            ]
-
-            i = 0
-            while i < len(lineas):
-                linea = lineas[i]
-                linea_clean = limpiar_texto(linea)
-                
-                if linea_clean in municipios_validos:
-                    current_municipio = linea_clean
-                    i += 1
-                    continue
-                
-                estado_lower = linea.lower()
-                if "apta para el" in estado_lower or "precauci" in estado_lower or "prohibido" in estado_lower or "sin bandera" in estado_lower:
-                    for j in range(i-1, max(-1, i-5), -1):
-                        candidata = lineas[j]
-                        candidata_clean = limpiar_texto(candidata)
-                        if (len(candidata_clean) > 2 
-                            and "/" not in candidata 
-                            and ":" not in candidata 
-                            and "aforo" not in candidata_clean 
-                            and "estado" not in candidata_clean 
-                            and "mar" not in candidata_clean):
-                            
-                            clave_compuesta = f"{current_municipio}_{candidata_clean}" if current_municipio else candidata_clean
-                            
-                            if "apta" in estado_lower:
-                                info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
-                            elif "precauci" in estado_lower:
-                                info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
-                            elif "prohibido" in estado_lower or "roja" in estado_lower:
-                                info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
-                            else:
-                                info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                    elements = page.locator("text=/apta para el baño|precaución|prohibido el baño/i").all()
+                    for el in elements:
+                        try:
+                            card = el.locator("xpath=ancestor::div[contains(@class, 'card') or contains(@style, 'border') or position()<=4]").first
+                            card_text = card.inner_text() if card else el.inner_text()
+                            lineas_tarjeta = [l.strip() for l in card_text.split('\n') if l.strip()]
+                            if not lineas_tarjeta:
+                                continue
                                 
-                            banderas[clave_compuesta] = info
-                            banderas[candidata_clean] = info
-                            break
-                i += 1
-                
+                            nombre_playa = ""
+                            estado_texto = ""
+                            
+                            for l in lineas_tarjeta:
+                                l_lower = l.lower()
+                                if any(st in l_lower for st in ["apta para el baño", "precaución", "prohibido"]):
+                                    estado_texto = l_lower
+                                elif not nombre_playa and len(l) > 2 and "aforo" not in l_lower and "estado" not in l_lower and "2026" not in l and "/" not in l:
+                                    nombre_playa = l
+                                    
+                            if nombre_playa and estado_texto:
+                                n_clean = limpiar_texto(nombre_playa)
+                                if "apta" in estado_texto:
+                                    info = {"color": "Verde", "texto": "Apta para el baño", "hex": "#28a745"}
+                                elif "precauci" in estado_texto:
+                                    info = {"color": "Amarilla", "texto": "Precaución", "hex": "#e0a800"}
+                                elif "prohibido" in estado_texto or "roja" in estado_texto:
+                                    info = {"color": "Roja", "texto": "Prohibido el baño", "hex": "#dc3545"}
+                                else:
+                                    info = {"color": "Azul", "texto": "Sin Bandera", "hex": "#0077b6"}
+                                    
+                                banderas[n_clean] = info
+                        except:
+                            continue
+                except:
+                    pass
+
+            # 1. Extraer lo que haya cargado inicialmente
+            extraer_tarjetas_actuales()
+
+            # 2. Iterar por cada municipio en el desplegable de la web para forzar la carga de todas las playas
+            selects = page.locator("select").all()
+            if selects:
+                municipio_select = selects[0]
+                options = municipio_select.locator("option").all()
+                for opt in options:
+                    val = opt.get_attribute("value")
+                    text = opt.inner_text()
+                    if not val or val == "0" or "todas" in text.lower() or "todos" in text.lower():
+                        continue
+                    try:
+                        municipio_select.select_option(value=val)
+                        page.wait_for_timeout(1500)
+                        extraer_tarjetas_actuales()
+                    except:
+                        pass
+                        
             browser.close()
     except Exception as e:
         print(f"[SCRAPING 112] Ocurrió un error: {e}")
@@ -288,7 +290,7 @@ def api_playas():
         municipio_clean = limpiar_texto(playa["municipio"])
         
         clave_busqueda = f"{municipio_clean}_{nombre_clean}"
-        bandera = banderas_112.get(clave_busqueda, banderas_112.get(nombre_clean, BANDERA_DEFECTO))
+        bandera = banderas_112.get(nombre_clean, banderas_112.get(clave_busqueda, BANDERA_DEFECTO))
         
         clima = obtener_clima_por_municipio(playa["municipio"], playa["lat"], playa["lng"])
         
